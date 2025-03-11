@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}上传固件{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>上传固件</h2>
+        <a href="{{ url_for('list_devices') }}" class="btn btn-secondary">返回设备列表</a>
+    </div>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="device_id" class="form-label">设备型号 *</label>
+                    <select class="form-control" id="device_id" name="device_id" required onchange="loadExistingVersions(this.value)">
+                        <option value="">请选择设备型号</option>
+                        {% for device in devices %}
+                        <option value="{{ device.id }}" {% if request.args.get('device_id') == device.id %}selected{% endif %}>
+                            {{ device.model_number }} - {{ device.model_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="version" class="form-label">固件版本 *</label>
+                    <input type="text" class="form-control" id="version" name="version" placeholder="例如: 1.0.0" required>
+                    <div class="form-text">请输入新固件的版本号</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="firmware_type" class="form-label">固件类型 *</label>
+                    <select class="form-control" id="firmware_type" name="firmware_type" required>
+                        <option value="device">设备固件</option>
+                        <option value="wifi">WiFi固件</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="compatible_versions" class="form-label">兼容版本</label>
+                    <div id="compatible_versions_container">
+                        <p class="text-muted" id="no_versions_message">请先选择设备以加载现有版本</p>
+                        <div id="compatible_versions_checkboxes" class="d-none">
+                            <!-- 这里将通过JavaScript动态加载已有版本的复选框 -->
+                        </div>
+                    </div>
+                    <div class="form-text">选择可以从哪些版本升级到此版本</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="description" class="form-label">描述</label>
+                    <textarea class="form-control" id="description" name="description" rows="3" placeholder="描述此固件的更新内容"></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="firmware_file" class="form-label">固件文件 *</label>
+                    <input type="file" class="form-control" id="firmware_file" name="firmware_file" required>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">上传固件</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <h5>说明：</h5>
+        <ul>
+            <li>固件版本号应遵循语义化版本规范（例如：1.0.0）</li>
+            <li>兼容版本表示可以从哪些版本升级到此版本</li>
+            <li>只能选择同一设备下已存在的固件版本作为兼容版本</li>
+            <li>固件文件应为二进制格式（.bin）</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+// 加载设备的现有固件版本
+function loadExistingVersions(deviceId) {
+    if (!deviceId) {
+        document.getElementById('no_versions_message').classList.remove('d-none');
+        document.getElementById('compatible_versions_checkboxes').classList.add('d-none');
+        return;
+    }
+    
+    // 获取固件类型
+    const firmwareType = document.getElementById('firmware_type').value;
+    
+    // 发送AJAX请求获取设备的现有固件版本
+    fetch(`/api/device/${deviceId}/versions?firmware_type=${firmwareType}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('compatible_versions_checkboxes');
+            container.innerHTML = ''; // 清空现有内容
+            
+            if (data.versions && data.versions.length > 0) {
+                document.getElementById('no_versions_message').classList.add('d-none');
+                container.classList.remove('d-none');
+                
+                // 为每个版本创建复选框
+                data.versions.forEach(version => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    
+                    const input = document.createElement('input');
+                    input.className = 'form-check-input';
+                    input.type = 'checkbox';
+                    input.name = 'compatible_versions';
+                    input.value = version.version;
+                    input.id = `version_${version.version.replace(/\./g, '_')}`;
+                    
+                    const label = document.createElement('label');
+                    label.className = 'form-check-label';
+                    label.htmlFor = input.id;
+                    label.textContent = `${version.version} (${new Date(version.created_at).toLocaleDateString()})`;
+                    
+                    div.appendChild(input);
+                    div.appendChild(label);
+                    container.appendChild(div);
+                });
+            } else {
+                document.getElementById('no_versions_message').textContent = '该设备暂无现有固件版本';
+                document.getElementById('no_versions_message').classList.remove('d-none');
+                container.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('获取版本失败:', error);
+            document.getElementById('no_versions_message').textContent = '加载版本失败，请重试';
+            document.getElementById('no_versions_message').classList.remove('d-none');
+            document.getElementById('compatible_versions_checkboxes').classList.add('d-none');
+        });
+}
+
+// 当固件类型改变时，重新加载版本
+document.getElementById('firmware_type').addEventListener('change', function() {
+    const deviceId = document.getElementById('device_id').value;
+    if (deviceId) {
+        loadExistingVersions(deviceId);
+    }
+});
+
+// 页面加载时，如果已选择设备，则加载版本
+document.addEventListener('DOMContentLoaded', function() {
+    const deviceId = document.getElementById('device_id').value;
+    if (deviceId) {
+        loadExistingVersions(deviceId);
+    }
+});
+</script>
+{% endblock %} 

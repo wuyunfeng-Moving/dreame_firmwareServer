@@ -1,0 +1,17 @@
+{
+  "id": "5d5d0b9e-db9e-4b0b-b149-93073d29da69",
+  "version": "1.0.1",
+  "device_id": "2580b464-cbb3-413e-ba3e-19062681070e",
+  "file_path": "uploads/firmwares\\Z4000_device_1.0.1_fb9692cb-9a6b-402c-9ec1-1520e127f94b.bin",
+  "file_size": 1004768,
+  "crc_checksum": "d65f4a413adfa7800b913d1bc4e8e6c1",
+  "description": "",
+  "is_wifi_firmware": false,
+  "is_device_firmware": true,
+  "status": "active",
+  "user_id": "54eaea8a-b472-45ab-991f-5e7cca7a8b43",
+  "created_at": "2025-03-03T02:56:45.585350",
+  "compatible_versions": [
+    "1.0.0"
+  ]
+}

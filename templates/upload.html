@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>上传固件</h2>
+
+<form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+        <label for="device_id" class="form-label">设备</label>
+        <select class="form-select" id="device_id" name="device_id" required>
+            <option value="">选择设备</option>
+            {% for device in devices %}
+            <option value="{{ device.id }}">{{ device.model_name }} ({{ device.model_number }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="mb-3">
+        <label for="version" class="form-label">固件版本</label>
+        <input type="text" class="form-control" id="version" name="version" required>
+    </div>
+    
+    <div class="mb-3">
+        <label for="firmware_type" class="form-label">固件类型</label>
+        <select class="form-select" id="firmware_type" name="firmware_type" required>
+            <option value="device">设备固件</option>
+            <option value="wifi">WiFi模块固件</option>
+        </select>
+    </div>
+    
+    <div class="mb-3">
+        <label for="firmware_file" class="form-label">固件文件</label>
+        <input type="file" class="form-control" id="firmware_file" name="firmware_file" required>
+    </div>
+    
+    <div class="mb-3">
+        <label for="description" class="form-label">描述</label>
+        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+    </div>
+    
+    <div class="mb-3">
+        <label class="form-label">兼容版本 (可多选)</label>
+        <div id="compatible_versions">
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" name="compatible_versions" placeholder="输入兼容的固件版本">
+                <button type="button" class="btn btn-outline-secondary add-version">+</button>
+            </div>
+        </div>
+    </div>
+    
+    <button type="submit" class="btn btn-primary">上传固件</button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addVersionBtn = document.querySelector('.add-version');
+    const versionsContainer = document.getElementById('compatible_versions');
+    
+    addVersionBtn.addEventListener('click', function() {
+        const newVersionField = document.createElement('div');
+        newVersionField.className = 'input-group mb-2';
+        newVersionField.innerHTML = `
+            <input type="text" class="form-control" name="compatible_versions" placeholder="输入兼容的固件版本">
+            <button type="button" class="btn btn-outline-danger remove-version">-</button>
+        `;
+        versionsContainer.appendChild(newVersionField);
+        
+        newVersionField.querySelector('.remove-version').addEventListener('click', function() {
+            versionsContainer.removeChild(newVersionField);
+        });
+    });
+});
+</script>
+{% endblock %}

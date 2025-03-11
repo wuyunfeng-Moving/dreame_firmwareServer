@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>用户管理</h2>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>用户名</th>
+                <th>公司</th>
+                <th>邮箱</th>
+                <th>电话</th>
+                <th>状态</th>
+                <th>注册时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.username }}</td>
+                <td>{{ user.company_name }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.phone }}</td>
+                <td>
+                    {% if user.status == 'pending' %}
+                    <span class="badge bg-warning">待审核</span>
+                    {% elif user.status == 'approved' %}
+                    <span class="badge bg-success">已批准</span>
+                    {% elif user.status == 'rejected' %}
+                    <span class="badge bg-danger">已拒绝</span>
+                    {% endif %}
+                </td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if user.status == 'pending' %}
+                    <form method="post" action="{{ url_for('approve_user', user_id=user.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-success">批准</button>
+                    </form>
+                    <form method="post" action="{{ url_for('reject_user', user_id=user.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-danger">拒绝</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">欢迎使用固件升级服务系统</h1>
+    <p class="lead">本系统提供固件管理和升级服务，支持WiFi模块和设备固件的在线升级。</p>
+    <hr class="my-4">
+    <p>如果您是供应商，请登录或注册账户以管理您的设备和固件。</p>
+    
+    {% if not current_user.is_authenticated %}
+    <div class="mt-4">
+        <a href="{{ url_for('login') }}" class="btn btn-primary me-2">登录</a>
+        <a href="{{ url_for('register') }}" class="btn btn-secondary">注册</a>
+    </div>
+    {% else %}
+    <div class="mt-4">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">进入控制面板</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">设备管理</h5>
+                <p class="card-text">添加和管理您的设备型号，为不同设备上传固件。</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">固件上传</h5>
+                <p class="card-text">上传新版本固件，并指定兼容的旧版本。</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">固件升级</h5>
+                <p class="card-text">设备可通过API自动检查和下载最新固件。</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
