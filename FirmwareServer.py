@@ -537,7 +537,7 @@ def upload_firmware():
         file.save(file_path)
         
         # 计算CRC校验和
-        crc = calculate_crc(file_path)
+        crc = calculate_crc_modbus(file_path)
         
         # 创建固件记录
         new_firmware = Firmware(
