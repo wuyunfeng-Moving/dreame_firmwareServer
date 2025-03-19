@@ -301,6 +301,7 @@ class Firmware:
                        data['is_device_firmware'] == is_device and \
                        data['status'] == 'active' and \
                        current_version in data.get('compatible_versions', []) or getlatest:
+                        
                         firmwares.append(cls.from_dict(data))
         
         # 按创建时间排序，返回最新的
@@ -635,8 +636,8 @@ def check_firmware():
         device_id=wifi_device.id,
         current_version=wifi_version,
         is_wifi=True,
-        is_device=False,
-        getlatest=True
+        is_device=False
+        # getlatest=True
     )
     
     if wifi_firmware:
@@ -668,10 +669,68 @@ def download_firmware(firmware_id):
     if not firmware:
         return jsonify({'error': 'Firmware not found'}), 404
     
-    return send_file(firmware.file_path, as_attachment=True)
+    # 添加下载日志
+    print(f"Firmware download started: ID={firmware_id}, Version={firmware.version}, Size={firmware.file_size} bytes")
+    
+    # 获取设备信息用于日志
+    device = Device.get(firmware.device_id)
+    device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
+    
+    print(f"Download details: Device={device_info}, File={os.path.basename(firmware.file_path)}")
+    
+    # 确保文件存在并获取实际文件大小
+    if not os.path.exists(firmware.file_path):
+        print(f"Error: Firmware file not found at {firmware.file_path}")
+        return jsonify({'error': 'Firmware file not found'}), 404
+    
+    actual_file_size = os.path.getsize(firmware.file_path)
+    if actual_file_size != firmware.file_size:
+        print(f"Warning: Stored file size ({firmware.file_size}) differs from actual file size ({actual_file_size})")
+        # 更新固件记录中的文件大小
+        firmware.file_size = actual_file_size
+        firmware.save()
+    
+    print(f"Confirmed file size: {actual_file_size} bytes")
+    
+    # 创建一个生成器函数来流式传输文件并跟踪进度
+    def generate_file():
+        file_size = actual_file_size
+        bytes_sent = 0
+        chunk_size = 8192  # 8KB chunks
+        last_percent = -1  # 设为-1确保第一次读取时会打印0%
+        
+        with open(firmware.file_path, 'rb') as f:
+            while True:
+                data = f.read(chunk_size)
+                if not data:
+                    break
+                    
+                bytes_sent += len(data)
+                percent = int((bytes_sent / file_size) * 100) if file_size > 0 else 100
+                
+                # 每1%打印一次进度
+                if percent != last_percent:
+                    print(f"Direct download progress: {percent}% ({bytes_sent}/{file_size} bytes)")
+                    last_percent = percent
+                    
+                yield data
+    
+    # 使用流式响应
+    filename = os.path.basename(firmware.file_path)
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"',
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': str(actual_file_size)  # 添加Content-Length头
+    }
+    
+    return app.response_class(
+        generate_file(),
+        headers=headers,
+        direct_passthrough=True
+    )
 
 # 新增: 固件分块下载API
-@app.route('/api/firmware/download/chunk/<int:firmware_id>', methods=['GET'])
+@app.route('/api/firmware/download/chunk/<firmware_id>', methods=['GET'])
 def download_firmware_chunk(firmware_id):
     firmware = Firmware.get(firmware_id)
     if not firmware:
@@ -680,6 +739,7 @@ def download_firmware_chunk(firmware_id):
     # 获取分块参数
     chunk_size = request.args.get('chunk_size', type=int, default=1024)
     chunk_index = request.args.get('chunk_index', type=int, default=0)
+    client_progress = request.args.get('client_progress', type=float, default=0)
     
     # 验证参数
     if chunk_size <= 0 or chunk_index < 0:
@@ -697,16 +757,36 @@ def download_firmware_chunk(firmware_id):
             # 计算总块数
             total_chunks = (firmware.file_size + chunk_size - 1) // chunk_size
             
+            # 使用客户端报告的进度，如果有的话
+            progress_percent = client_progress if client_progress > 0 else min(100, round((chunk_index + 1) / total_chunks * 100, 2))
+            
+            # 打印下载进度日志
+            if chunk_index == 0:
+                # 首次请求，打印开始下载信息
+                device = Device.get(firmware.device_id)
+                device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
+                print(f"Chunked download started: ID={firmware_id}, Version={firmware.version}, Device={device_info}")
+                print(f"Total file size: {firmware.file_size} bytes, Total chunks: {total_chunks}")
+            
+            # 每5%打印一次进度，或者是第一个和最后一个块
+            if chunk_index == 0 or chunk_index == total_chunks - 1 or int(progress_percent) % 5 == 0:
+                bytes_downloaded = min(firmware.file_size, (chunk_index + 1) * chunk_size)
+                print(f"Download progress: {progress_percent}% ({bytes_downloaded}/{firmware.file_size} bytes, chunk {chunk_index+1}/{total_chunks})")
+            
             # 返回分块数据和元数据
             response = {
                 'chunk_index': chunk_index,
                 'total_chunks': total_chunks,
                 'chunk_size': len(chunk_data),
-                'data': chunk_data.hex()  # 将二进制数据转换为十六进制字符串
+                'data': chunk_data.hex(),  # 将二进制数据转换为十六进制字符串
+                'progress': progress_percent,
+                'file_size': firmware.file_size,
+                'bytes_downloaded': min(firmware.file_size, (chunk_index + 1) * chunk_size)
             }
             
             return jsonify(response)
     except Exception as e:
+        print(f"Error in chunk download: {str(e)}")
         return jsonify({'error': f'Error reading firmware file: {str(e)}'}), 500
 
 # 新增: 固件版本列表API
