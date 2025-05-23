@@ -1,0 +1,22 @@
+{
+  "id": "bd1b6454-950b-47cc-9316-5a464f9e7fe0",
+  "version": "1.5.4",
+  "device_id": "61d6c3a4-927c-446c-b900-fdadc7364855",
+  "file_path": "uploads/firmwares/wifi_wifi_1.5.4_17c09a5e-ed62-4831-84c0-483a6ae19817.bin",
+  "file_size": 1010160,
+  "crc_checksum": "3149",
+  "description": "",
+  "is_wifi_firmware": true,
+  "is_device_firmware": false,
+  "status": "active",
+  "user_id": "54eaea8a-b472-45ab-991f-5e7cca7a8b43",
+  "created_at": "2025-03-12T00:20:41.310373",
+  "compatible_versions": [
+    "1.5.3",
+    "1.5.4",
+    "1.5.2",
+    "1.5.1",
+    "1.4.8",
+    "1.0.0"
+  ]
+}

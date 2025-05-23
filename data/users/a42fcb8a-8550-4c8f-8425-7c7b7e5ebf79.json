@@ -1,0 +1,16 @@
+{
+  "id": "a42fcb8a-8550-4c8f-8425-7c7b7e5ebf79",
+  "username": "123",
+  "password": "scrypt:32768:8:1$Cx0QYh7AiEi5mMmJ$86637cfc7ded06923032aa18a621aa1adc4d9f1e202ec38144dc24cc462a00620c265d3055d677675b3d6d6d41c5f8c981148a40f49b24c4b4d1a748dd9bfc67",
+  "company_name": "123",
+  "email": "123@123.com",
+  "phone": "123",
+  "status": "approved",
+  "created_at": "2025-05-23T01:16:15.354470",
+  "updated_at": "2025-05-23T02:24:18.893634",
+  "is_admin": false,
+  "visible_model_numbers": [
+    "dreame.dishwasher.z4000",
+    "dreame.hob.cxw260z8hpro"
+  ]
+}

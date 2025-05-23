@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}为 {{ target_user.username }} 分配设备型号{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>为用户 {{ target_user.username }} ({{ target_user.company_name }}) 分配可见设备型号</h2>
+    <hr>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category != 'message' else 'info' }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p>请选择允许用户 <strong>{{ target_user.username }}</strong> 查看和管理固件的设备型号。</p>
+
+    <form method="POST">
+        <div class="list-group mb-3">
+            {% if all_model_numbers %}
+                {% for model_num in all_model_numbers %}
+                <label class="list-group-item">
+                    <input class="form-check-input me-1" type="checkbox" name="model_numbers" value="{{ model_num }}"
+                           {% if model_num in assigned_model_numbers %}checked{% endif %}>
+                    <strong>型号: {{ model_num }}</strong>
+                </label>
+                {% endfor %}
+            {% else %}
+                <p>系统中当前没有设备型号可供分配。</p>
+            {% endif %}
+        </div>
+        
+        <button type="submit" class="btn btn-primary">保存更改</button>
+        <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">返回用户列表</a>
+    </form>
+</div>
+
+{% endblock %} 

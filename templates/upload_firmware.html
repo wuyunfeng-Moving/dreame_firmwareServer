@@ -53,6 +53,12 @@
                     <label for="compatible_versions" class="form-label">兼容版本</label>
                     <div id="compatible_versions_container">
                         <p class="text-muted" id="no_versions_message">请先选择设备以加载现有版本</p>
+                        <div class="form-check mb-2 d-none" id="support_all_container">
+                            <input class="form-check-input" type="checkbox" id="support_all_below">
+                            <label class="form-check-label fw-bold" for="support_all_below">
+                                以下全部支持
+                            </label>
+                        </div>
                         <div id="compatible_versions_checkboxes" class="d-none">
                             <!-- 这里将通过JavaScript动态加载已有版本的复选框 -->
                         </div>
@@ -60,6 +66,12 @@
                     <div class="form-text">选择可以从哪些版本升级到此版本</div>
                 </div>
                 
+                <div class="mb-3">
+                    <label for="manual_compatible_version" class="form-label">手动输入兼容版本</label>
+                    <input type="text" class="form-control" id="manual_compatible_version" name="manual_compatible_version" placeholder="例如: 1.0.1; 1.0.2">
+                    <div class="form-text">如果上面列表中没有，可在此手动输入兼容的版本号 (格式 x.x.x)。多个版本请用英文分号 <code class="text-danger">;</code> 分隔。</div>
+                </div>
+
                 <div class="mb-3">
                     <label for="description" class="form-label">描述</label>
                     <textarea class="form-control" id="description" name="description" rows="3" placeholder="描述此固件的更新内容"></textarea>
@@ -91,9 +103,20 @@
 <script>
 // 加载设备的现有固件版本
 function loadExistingVersions(deviceId) {
+    const supportAllContainer = document.getElementById('support_all_container');
+    const supportAllCheckbox = document.getElementById('support_all_below');
+    const versionsContainer = document.getElementById('compatible_versions_checkboxes');
+    const noVersionsMessage = document.getElementById('no_versions_message');
+
+    // Reset state
+    noVersionsMessage.textContent = '请先选择设备以加载现有版本';
+    noVersionsMessage.classList.remove('d-none');
+    versionsContainer.classList.add('d-none');
+    supportAllContainer.classList.add('d-none');
+    supportAllCheckbox.checked = false;
+    versionsContainer.innerHTML = ''; // Clear previous checkboxes
+    
     if (!deviceId) {
-        document.getElementById('no_versions_message').classList.remove('d-none');
-        document.getElementById('compatible_versions_checkboxes').classList.add('d-none');
         return;
     }
     
@@ -104,12 +127,10 @@ function loadExistingVersions(deviceId) {
     fetch(`/api/device/${deviceId}/versions?firmware_type=${firmwareType}`)
         .then(response => response.json())
         .then(data => {
-            const container = document.getElementById('compatible_versions_checkboxes');
-            container.innerHTML = ''; // 清空现有内容
-            
             if (data.versions && data.versions.length > 0) {
-                document.getElementById('no_versions_message').classList.add('d-none');
-                container.classList.remove('d-none');
+                noVersionsMessage.classList.add('d-none');
+                versionsContainer.classList.remove('d-none');
+                supportAllContainer.classList.remove('d-none');
                 
                 // 为每个版本创建复选框
                 data.versions.forEach(version => {
@@ -117,12 +138,25 @@ function loadExistingVersions(deviceId) {
                     div.className = 'form-check';
                     
                     const input = document.createElement('input');
-                    input.className = 'form-check-input';
+                    input.className = 'form-check-input compatible-version-checkbox'; // Add class for selection
                     input.type = 'checkbox';
                     input.name = 'compatible_versions';
                     input.value = version.version;
                     input.id = `version_${version.version.replace(/\./g, '_')}`;
                     
+                    // Add event listener to individual checkboxes
+                    input.addEventListener('change', () => {
+                        if (!input.checked) {
+                            supportAllCheckbox.checked = false; // Uncheck "Support All" if any individual is unchecked
+                        }
+                        // Check if all individuals are checked
+                        else {
+                             const allCheckboxes = versionsContainer.querySelectorAll('.compatible-version-checkbox');
+                             const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
+                             supportAllCheckbox.checked = allChecked;
+                        }
+                    });
+
                     const label = document.createElement('label');
                     label.className = 'form-check-label';
                     label.htmlFor = input.id;
@@ -130,21 +164,33 @@ function loadExistingVersions(deviceId) {
                     
                     div.appendChild(input);
                     div.appendChild(label);
-                    container.appendChild(div);
+                    versionsContainer.appendChild(div);
                 });
+                
             } else {
-                document.getElementById('no_versions_message').textContent = '该设备暂无现有固件版本';
-                document.getElementById('no_versions_message').classList.remove('d-none');
-                container.classList.add('d-none');
+                noVersionsMessage.textContent = '该设备暂无现有固件版本';
+                noVersionsMessage.classList.remove('d-none');
+                versionsContainer.classList.add('d-none');
+                supportAllContainer.classList.add('d-none');
             }
         })
         .catch(error => {
             console.error('获取版本失败:', error);
-            document.getElementById('no_versions_message').textContent = '加载版本失败，请重试';
-            document.getElementById('no_versions_message').classList.remove('d-none');
-            document.getElementById('compatible_versions_checkboxes').classList.add('d-none');
+            noVersionsMessage.textContent = '加载版本失败，请重试';
+            noVersionsMessage.classList.remove('d-none');
+            versionsContainer.classList.add('d-none');
+            supportAllContainer.classList.add('d-none');
         });
 }
+
+// Add event listener for "Support All" checkbox
+document.getElementById('support_all_below').addEventListener('change', function() {
+    const isChecked = this.checked;
+    const checkboxes = document.querySelectorAll('#compatible_versions_checkboxes .compatible-version-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+});
 
 // 当固件类型改变时，重新加载版本
 document.getElementById('firmware_type').addEventListener('change', function() {

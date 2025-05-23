@@ -1,51 +1,103 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
+{% block title %}用户管理{% endblock %}
 
 {% block content %}
-<h2>用户管理</h2>
+<div class="container mt-4">
+    <h2>用户管理</h2>
+    <hr>
 
-<div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>用户名</th>
-                <th>公司</th>
-                <th>邮箱</th>
-                <th>电话</th>
-                <th>状态</th>
-                <th>注册时间</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr>
-                <td>{{ user.username }}</td>
-                <td>{{ user.company_name }}</td>
-                <td>{{ user.email }}</td>
-                <td>{{ user.phone }}</td>
-                <td>
-                    {% if user.status == 'pending' %}
-                    <span class="badge bg-warning">待审核</span>
-                    {% elif user.status == 'approved' %}
-                    <span class="badge bg-success">已批准</span>
-                    {% elif user.status == 'rejected' %}
-                    <span class="badge bg-danger">已拒绝</span>
-                    {% endif %}
-                </td>
-                <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
-                <td>
-                    {% if user.status == 'pending' %}
-                    <form method="post" action="{{ url_for('approve_user', user_id=user.id) }}" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-success">批准</button>
-                    </form>
-                    <form method="post" action="{{ url_for('reject_user', user_id=user.id) }}" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-danger">拒绝</button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-info">{{ message }}</div>
             {% endfor %}
-        </tbody>
-    </table>
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>用户名</th>
+                    <th>公司名称</th>
+                    <th>邮箱</th>
+                    <th>电话</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    {% if user.username != current_user.username %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.company_name }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.phone }}</td>
+                            <td>
+                                {% if user.status == 'pending' %}
+                                    <span class="badge bg-warning">待审核</span>
+                                {% elif user.status == 'approved' %}
+                                    <span class="badge bg-success">已批准</span>
+                                {% elif user.status == 'rejected' %}
+                                    <span class="badge bg-danger">已拒绝</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'N/A' }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    {% if not user.is_admin %}
+                                        {% if user.status == 'pending' %}
+                                            <form action="{{ url_for('approve_user', user_id=user.id) }}" method="POST" style="display: inline;">
+                                                <button type="submit" class="btn btn-success btn-sm">批准</button>
+                                            </form>
+                                            <form action="{{ url_for('reject_user', user_id=user.id) }}" method="POST" style="display: inline;">
+                                                <button type="submit" class="btn btn-danger btn-sm">拒绝</button>
+                                            </form>
+                                        {% endif %}
+                                        <!-- 添加设备型号权限配置按钮 -->
+                                        <a href="{{ url_for('admin_assign_devices', user_id=user.id) }}" 
+                                           class="btn btn-primary btn-sm {% if user.status != 'approved' %}disabled{% endif %}"
+                                           title="{% if user.status != 'approved' %}需要先批准用户才能配置设备权限{% endif %}">
+                                            配置设备权限
+                                        </a>
+                                        <!-- 显示当前可见的设备型号 -->
+                                        {% if user.visible_model_numbers %}
+                                        <button type="button" 
+                                                class="btn btn-info btn-sm" 
+                                                data-bs-toggle="popover" 
+                                                data-bs-placement="left"
+                                                data-bs-trigger="hover"
+                                                title="已授权的设备型号"
+                                                data-bs-content="{{ user.visible_model_numbers|join(', ') }}">
+                                            查看已授权型号
+                                        </button>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-info">管理员</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化所有的弹出框
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl)
+    })
+});
+</script>
 {% endblock %} 
