@@ -487,6 +487,22 @@ def calculate_crc_modbus(file_path):
     crc = uchCRCLo + (uchCRCHi << 8)
     return crc
 
+# 在现有的 calculate_crc_modbus 函数之后添加版本验证函数
+def validate_version_format(version, device_type):
+    """
+    根据设备类型验证版本格式
+    :param version: 版本号字符串
+    :param device_type: 设备类型 ('wifi' 或 'device')
+    :return: bool
+    """
+    if device_type == 'wifi':
+        # WiFi固件版本格式: x.x.x (如 1.0.0)
+        pattern = r'^\d+\.\d+\.\d+$'
+        return bool(re.match(pattern, version))
+    else:
+        # 设备固件版本格式: 纯数字 (如 100)
+        return version.isdigit()
+
 # 添加模板全局函数
 @app.template_global()
 def get_device(device_id):
@@ -511,8 +527,12 @@ def register():
         email = request.form.get('email')
         phone = request.form.get('phone')
         
+        # 记录注册尝试
+        app.logger.info(f"Registration attempt: username={username}, company={company_name}, email={email}, phone={phone}, IP={request.remote_addr}")
+        
         user_exists = User.get_by_username(username)
         if user_exists:
+            app.logger.warning(f"Registration failed - username already exists: {username}, IP={request.remote_addr}")
             flash('用户名已存在')
             return redirect(url_for('register'))
         
@@ -528,9 +548,11 @@ def register():
         
         new_user.save()
         
+        app.logger.info(f"User registration successful: ID={new_user.id}, username={username}, company={company_name}, IP={request.remote_addr}")
         flash('注册成功，请等待管理员审核')
         return redirect(url_for('login'))
     
+    app.logger.info(f"Registration page accessed from IP={request.remote_addr}")
     return render_template('register.html')
 
 # 路由: 用户登录
@@ -540,25 +562,37 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
+        app.logger.info(f"Login attempt: username={username}, IP={request.remote_addr}, User-Agent={request.headers.get('User-Agent', 'Unknown')}")
+        
         user = User.get_by_username(username)
         
-        if not user or not check_password_hash(user.password, password):
+        if not user:
+            app.logger.warning(f"Login failed - user not found: username={username}, IP={request.remote_addr}")
+            flash('用户名或密码错误')
+            return redirect(url_for('login'))
+            
+        if not check_password_hash(user.password, password):
+            app.logger.warning(f"Login failed - incorrect password: username={username}, IP={request.remote_addr}")
             flash('用户名或密码错误')
             return redirect(url_for('login'))
         
         if user.status != 'approved' and not user.is_admin:
+            app.logger.warning(f"Login failed - user not approved: username={username}, status={user.status}, IP={request.remote_addr}")
             flash('您的账户尚未获得批准')
             return redirect(url_for('login'))
         
         login_user(user)
+        app.logger.info(f"Login successful: user_id={user.id}, username={username}, is_admin={user.is_admin}, IP={request.remote_addr}")
         return redirect(url_for('dashboard'))
     
+    app.logger.info(f"Login page accessed from IP={request.remote_addr}")
     return render_template('login.html')
 
 # 路由: 用户登出
 @app.route('/logout')
 @login_required
 def logout():
+    app.logger.info(f"User logout: user_id={current_user.id}, username={current_user.username}, IP={request.remote_addr}")
     logout_user()
     return redirect(url_for('index'))
 
@@ -570,10 +604,13 @@ def dashboard():
     all_system_devices = Device.get_all() 
     if current_user.is_admin:
         devices_to_display = all_system_devices
+        app.logger.info(f"Dashboard accessed by admin: user_id={current_user.id}, total_devices={len(devices_to_display)}, IP={request.remote_addr}")
     else:
         user_visible_models = current_user.visible_model_numbers
         if user_visible_models: 
             devices_to_display = [d for d in all_system_devices if d.model_number in user_visible_models]
+        app.logger.info(f"Dashboard accessed by user: user_id={current_user.id}, visible_models={user_visible_models}, visible_devices={len(devices_to_display)}, IP={request.remote_addr}")
+    
     return render_template('dashboard.html', devices=devices_to_display)
 
 # 路由: 设备管理
@@ -584,10 +621,12 @@ def list_devices():
     all_system_devices = Device.get_all()
     if current_user.is_admin:
         devices_to_display = all_system_devices
+        app.logger.info(f"Device list accessed by admin: user_id={current_user.id}, total_devices={len(devices_to_display)}, IP={request.remote_addr}")
     else:
         user_visible_models = current_user.visible_model_numbers
         if user_visible_models:
             devices_to_display = [d for d in all_system_devices if d.model_number in user_visible_models]
+        app.logger.info(f"Device list accessed by user: user_id={current_user.id}, visible_models={user_visible_models}, visible_devices={len(devices_to_display)}, IP={request.remote_addr}")
             
     return render_template('devices.html', devices=devices_to_display)
 
@@ -596,6 +635,7 @@ def list_devices():
 @login_required
 def add_device():
     if not current_user.is_admin:
+        app.logger.warning(f"Unauthorized device add attempt: user_id={current_user.id}, IP={request.remote_addr}")
         flash('您没有权限执行此操作。')
         return redirect(url_for('list_devices'))
 
@@ -603,10 +643,13 @@ def add_device():
         model_number = request.form.get('model_number')
         model_name = request.form.get('model_name')
         description = request.form.get('description')
-        device_type = request.form.get('device_type', 'device')  # 获取设备类型
+        device_type = request.form.get('device_type', 'device')
+        
+        app.logger.info(f"Device add attempt: admin_id={current_user.id}, model_number={model_number}, model_name={model_name}, device_type={device_type}, IP={request.remote_addr}")
         
         device_exists = Device.get_by_model_number(model_number)
         if device_exists:
+            app.logger.warning(f"Device add failed - model exists: model_number={model_number}, admin_id={current_user.id}, IP={request.remote_addr}")
             flash('该型号已存在')
             return redirect(url_for('add_device'))
         
@@ -616,14 +659,16 @@ def add_device():
             model_name=model_name,
             description=description,
             user_id=current_user.id,
-            device_type=device_type  # 设置设备类型
+            device_type=device_type
         )
         
         new_device.save()
         
+        app.logger.info(f"Device added successfully: device_id={new_device.id}, model_number={model_number}, model_name={model_name}, device_type={device_type}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('设备添加成功')
         return redirect(url_for('list_devices'))
     
+    app.logger.info(f"Add device page accessed: admin_id={current_user.id}, IP={request.remote_addr}")
     return render_template('add_device.html')
 
 # 路由: 固件管理
@@ -639,6 +684,7 @@ def list_firmwares():
     if device_id_param:
         target_device_instance = next((d for d in all_system_devices if d.id == device_id_param), None)
         if not target_device_instance:
+            app.logger.warning(f"Firmware list access failed - device not found: device_id={device_id_param}, user_id={current_user.id}, IP={request.remote_addr}")
             flash('设备未找到。')
             return redirect(url_for('list_devices'))
 
@@ -649,29 +695,34 @@ def list_firmwares():
             is_authorized = True
 
         if not is_authorized:
+            app.logger.warning(f"Firmware list access denied: device_id={device_id_param}, model_number={target_device_instance.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
             flash('您无权查看此设备的固件。')
             return redirect(url_for('list_devices'))
         
         firmwares_to_display = Firmware.get_all(device_id=device_id_param)
+        app.logger.info(f"Device firmware list accessed: device_id={device_id_param}, model_number={target_device_instance.model_number}, firmware_count={len(firmwares_to_display)}, user_id={current_user.id}, IP={request.remote_addr}")
         return render_template('firmwares.html', firmwares=firmwares_to_display, device=target_device_instance)
     else:
-        # Listing all firmwares across all visible devices for a user, or all for admin
+        # Listing all firmwares
         if current_user.is_admin:
             authorized_devices_instances = all_system_devices
             firmwares_to_display = Firmware.get_all() 
             devices_map = {dev.id: dev for dev in authorized_devices_instances}
+            app.logger.info(f"All firmware list accessed by admin: user_id={current_user.id}, total_firmwares={len(firmwares_to_display)}, IP={request.remote_addr}")
             return render_template('firmwares.html', firmwares=firmwares_to_display, all_devices_map=devices_map, view_all=True)
         else: 
             user_visible_models = current_user.visible_model_numbers
             if not user_visible_models:
+                app.logger.info(f"Firmware list access - no visible models: user_id={current_user.id}, IP={request.remote_addr}")
                 flash('您当前没有被授权访问任何设备的固件。')
                 return render_template('firmwares.html', firmwares=[], device=None, view_all=True)
 
             authorized_devices_instances = [d for d in all_system_devices if d.model_number in user_visible_models]
             
             if not authorized_devices_instances:
-                 flash('没有找到您有权限访问的设备型号的固件。')
-                 return render_template('firmwares.html', firmwares=[], device=None, view_all=True)
+                app.logger.info(f"Firmware list access - no authorized devices: user_id={current_user.id}, visible_models={user_visible_models}, IP={request.remote_addr}")
+                flash('没有找到您有权限访问的设备型号的固件。')
+                return render_template('firmwares.html', firmwares=[], device=None, view_all=True)
 
             authorized_device_ids = [d.id for d in authorized_devices_instances]
             for dev_id in authorized_device_ids:
@@ -679,23 +730,8 @@ def list_firmwares():
                 firmwares_to_display.extend(firmwares_for_device)
             
             devices_map = {dev.id: dev for dev in authorized_devices_instances}
+            app.logger.info(f"User firmware list accessed: user_id={current_user.id}, visible_models={user_visible_models}, authorized_devices={len(authorized_devices_instances)}, total_firmwares={len(firmwares_to_display)}, IP={request.remote_addr}")
             return render_template('firmwares.html', firmwares=firmwares_to_display, visible_devices_map=devices_map, view_all=True)
-
-# 修改版本验证函数
-def validate_version_format(version, device_type):
-    """
-    根据设备类型验证版本格式
-    :param version: 版本号字符串
-    :param device_type: 设备类型 ('wifi' 或 'device')
-    :return: bool
-    """
-    if device_type == 'wifi':
-        # WiFi固件版本格式: x.x.x (如 1.0.0)
-        pattern = r'^\d+\.\d+\.\d+$'
-        return bool(re.match(pattern, version))
-    else:
-        # 设备固件版本格式: 纯数字 (如 100)
-        return version.isdigit()
 
 # 修改上传固件路由中的版本验证部分
 @app.route('/firmwares/upload', methods=['GET', 'POST'])
@@ -715,9 +751,12 @@ def upload_firmware():
         version = request.form.get('version')
         description = request.form.get('description')
         
+        app.logger.info(f"Firmware upload attempt: user_id={current_user.id}, device_id={device_id}, version={version}, IP={request.remote_addr}")
+        
         # 获取设备信息并确定固件类型
         target_device_instance = next((d for d in all_system_devices if d.id == device_id), None)
         if not target_device_instance:
+            app.logger.warning(f"Firmware upload failed - device not found: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
             flash('选择的设备不存在。')
             return render_template('upload_firmware.html', devices=devices_for_form)
             
@@ -726,8 +765,11 @@ def upload_firmware():
         is_wifi = firmware_type == 'wifi'
         is_device = firmware_type == 'device'
         
+        app.logger.info(f"Firmware upload details: device_model={target_device_instance.model_number}, device_type={firmware_type}, version={version}, user_id={current_user.id}")
+        
         # 验证版本格式
         if not validate_version_format(version, firmware_type):
+            app.logger.warning(f"Firmware upload failed - invalid version format: version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
             if firmware_type == 'wifi':
                 flash('WiFi固件版本格式必须为 x.x.x（如 1.0.0）')
             else:
@@ -738,18 +780,20 @@ def upload_firmware():
         existing_firmwares = Firmware.get_all(device_id=device_id)
         for firmware in existing_firmwares:
             if firmware.version == version and firmware.is_wifi_firmware == is_wifi and firmware.is_device_firmware == is_device:
+                app.logger.warning(f"Firmware upload failed - version exists: device_id={device_id}, version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
                 flash('该版本固件已存在')
                 return redirect(url_for('upload_firmware'))
 
         # --- Make sure file is selected ---
         if 'firmware_file' not in request.files:
+            app.logger.warning(f"Firmware upload failed - no file selected: user_id={current_user.id}, IP={request.remote_addr}")
             flash('没有选择文件')
-            # Pass existing form data back to the template for better UX
             return render_template('upload_firmware.html', devices=devices_for_form, 
                                    selected_device_id=device_id, version=version, description=description)
         
         file_from_request = request.files['firmware_file']
         if file_from_request.filename == '':
+            app.logger.warning(f"Firmware upload failed - empty filename: user_id={current_user.id}, IP={request.remote_addr}")
             flash('没有选择文件')
             return render_template('upload_firmware.html', devices=devices_for_form,
                                    selected_device_id=device_id, version=version, description=description)
@@ -759,9 +803,13 @@ def upload_firmware():
         filename = secure_filename(f"{target_device_instance.model_number}_{firmware_type}_{version}_{uuid.uuid4()}.bin")
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
+        app.logger.info(f"Saving firmware file: original_filename={file_from_request.filename}, saved_filename={filename}, file_path={file_path}, user_id={current_user.id}")
+        
         file_from_request.save(file_path)
+        file_size = os.path.getsize(file_path)
         
         # 计算CRC校验和
+        app.logger.info(f"Calculating CRC for firmware: file_path={file_path}, file_size={file_size}")
         crc = calculate_crc_modbus(file_path)
         
         # 创建固件记录
@@ -770,7 +818,7 @@ def upload_firmware():
             version=version,
             device_id=device_id,
             file_path=file_path,
-            file_size=os.path.getsize(file_path),
+            file_size=file_size,
             crc_checksum=crc,
             description=description,
             is_wifi_firmware=is_wifi,
@@ -780,12 +828,13 @@ def upload_firmware():
         )
         
         new_firmware.save()
-        app.logger.info(f"User {current_user.username} uploaded firmware {version} for device {target_device_instance.model_number} ({device_id})")
+        app.logger.info(f"Firmware uploaded successfully: firmware_id={new_firmware.id}, device_model={target_device_instance.model_number}, version={version}, file_size={file_size}, crc={crc}, user_id={current_user.id}, IP={request.remote_addr}")
         
         flash('固件上传成功')
         return redirect(url_for('list_firmwares', device_id=device_id))
     
     # GET request
+    app.logger.info(f"Upload firmware page accessed: user_id={current_user.id}, available_devices={len(devices_for_form)}, IP={request.remote_addr}")
     if not devices_for_form and not current_user.is_admin:
         flash("您当前没有被授权管理任何设备的固件，无法上传。")
     return render_template('upload_firmware.html', devices=devices_for_form)
@@ -793,35 +842,42 @@ def upload_firmware():
 # API: 固件查询
 @app.route('/firmware/check', methods=['POST'])
 def check_firmware():
-    print("check_firmware")
+    client_ip = request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    
+    app.logger.info(f"Firmware check request received: IP={client_ip}, User-Agent={user_agent}")
+    
     data = request.json
     if not data:
+        app.logger.warning(f"Firmware check failed - no data provided: IP={client_ip}")
         return jsonify({'error': 'No data provided'}), 400
 
-    print(data)
+    app.logger.info(f"Firmware check data: {data}, IP={client_ip}")
     
     model_number = data.get('device_model')
     device_version = data.get('device_version')
     wifi_version = data.get('wifi_version')
     
     if not model_number or not device_version or not wifi_version:
-        print("Missing required fields")
+        app.logger.warning(f"Firmware check failed - missing fields: model={model_number}, device_ver={device_version}, wifi_ver={wifi_version}, IP={client_ip}")
         return jsonify({'error': 'Missing required fields'}), 400
     
     # 验证版本格式
     if not validate_version_format(device_version, 'device'):
-        print("Invalid device version format, must be x.x.x")
-        return jsonify({'error': 'Invalid device version format, must be x.x.x'}), 400
+        app.logger.warning(f"Firmware check failed - invalid device version format: device_version={device_version}, IP={client_ip}")
+        return jsonify({'error': 'Invalid device version format, must be numeric'}), 400
     
     if not validate_version_format(wifi_version, 'wifi'):
-        print("Invalid WiFi version format, must be x.x.x")
+        app.logger.warning(f"Firmware check failed - invalid WiFi version format: wifi_version={wifi_version}, IP={client_ip}")
         return jsonify({'error': 'Invalid WiFi version format, must be x.x.x'}), 400
     
     # 查找设备
     device = Device.get_by_model_number(model_number)
     if not device:
-        print("Device not found")
+        app.logger.warning(f"Firmware check failed - device not found: model_number={model_number}, IP={client_ip}")
         return jsonify({'error': 'Device not found'}), 404
+    
+    app.logger.info(f"Device found for firmware check: device_id={device.id}, model_number={model_number}, device_name={device.model_name}, IP={client_ip}")
     
     # 构建响应
     response = {
@@ -840,7 +896,7 @@ def check_firmware():
     )
     
     if device_firmware:
-        base_url = request.host.split(':')[0]  # 获取主机地址，去掉可能存在的端口
+        base_url = request.host.split(':')[0]
         download_url = f"http://{base_url}:3000/firmware/download/{device_firmware.id}"
         response["device"] = {
             "current_version": device_version,
@@ -850,6 +906,7 @@ def check_firmware():
             "crc16": device_firmware.crc_checksum,
             "notes": device_firmware.description
         }
+        app.logger.info(f"Device firmware update available: model={model_number}, current={device_version}, latest={device_firmware.version}, firmware_id={device_firmware.id}, IP={client_ip}")
     else:
         response["device"] = {
             "current_version": device_version,
@@ -859,10 +916,12 @@ def check_firmware():
             "crc16": None,
             "notes": None
         }
+        app.logger.info(f"No device firmware update available: model={model_number}, current={device_version}, IP={client_ip}")
     
     # 检查WiFi固件更新
     wifi_device = Device.get_by_model_number('wifi')    
     if not wifi_device:
+        app.logger.error(f"WiFi device not found in system: IP={client_ip}")
         return jsonify({'error': 'WiFi device not found'}), 404
     
     wifi_firmware = Firmware.find_compatible(
@@ -870,11 +929,10 @@ def check_firmware():
         current_version=wifi_version,
         is_wifi=True,
         is_device=False
-        # getlatest=True
     )
     
     if wifi_firmware:
-        base_url = request.host.split(':')[0]  # 获取主机地址，去掉可能存在的端口
+        base_url = request.host.split(':')[0]
         download_url = f"http://{base_url}:3000/firmware/download/{wifi_firmware.id}"
         response["wifi"] = {
             "current_version": wifi_version,
@@ -884,6 +942,7 @@ def check_firmware():
             "crc16": wifi_firmware.crc_checksum,
             "notes": wifi_firmware.description
         }
+        app.logger.info(f"WiFi firmware update available: current={wifi_version}, latest={wifi_firmware.version}, firmware_id={wifi_firmware.id}, IP={client_ip}")
     else:
         response["wifi"] = {
             "current_version": wifi_version,
@@ -893,46 +952,50 @@ def check_firmware():
             "crc16": None,
             "notes": None
         }
+        app.logger.info(f"No WiFi firmware update available: current={wifi_version}, IP={client_ip}")
     
-    print(response)
+    app.logger.info(f"Firmware check completed: model={model_number}, device_upgradable={response['device']['upgradable']}, wifi_upgradable={response['wifi']['upgradable']}, IP={client_ip}")
     return jsonify(response)
 
 # API: 固件下载
 @app.route('/firmware/download/<firmware_id>', methods=['GET'])
 def download_firmware(firmware_id):
+    client_ip = request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    
+    app.logger.info(f"Firmware download request: firmware_id={firmware_id}, IP={client_ip}, User-Agent={user_agent}")
+    
     firmware = Firmware.get(firmware_id)
     if not firmware:
+        app.logger.warning(f"Firmware download failed - not found: firmware_id={firmware_id}, IP={client_ip}")
         return jsonify({'error': 'Firmware not found'}), 404
-    
-    # 添加下载日志
-    print(f"Firmware download started: ID={firmware_id}, Version={firmware.version}, Size={firmware.file_size} bytes")
     
     # 获取设备信息用于日志
     device = Device.get(firmware.device_id)
     device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
     
-    print(f"Download details: Device={device_info}, File={os.path.basename(firmware.file_path)}")
+    app.logger.info(f"Firmware download started: firmware_id={firmware_id}, version={firmware.version}, device={device_info}, file_size={firmware.file_size} bytes, IP={client_ip}")
     
     # 确保文件存在并获取实际文件大小
     if not os.path.exists(firmware.file_path):
-        print(f"Error: Firmware file not found at {firmware.file_path}")
+        app.logger.error(f"Firmware file not found: firmware_id={firmware_id}, file_path={firmware.file_path}, IP={client_ip}")
         return jsonify({'error': 'Firmware file not found'}), 404
     
     actual_file_size = os.path.getsize(firmware.file_path)
     if actual_file_size != firmware.file_size:
-        print(f"Warning: Stored file size ({firmware.file_size}) differs from actual file size ({actual_file_size})")
-        # 更新固件记录中的文件大小
+        app.logger.warning(f"File size mismatch: firmware_id={firmware_id}, stored_size={firmware.file_size}, actual_size={actual_file_size}, IP={client_ip}")
         firmware.file_size = actual_file_size
         firmware.save()
     
-    print(f"Confirmed file size: {actual_file_size} bytes")
+    app.logger.info(f"Firmware download confirmed: firmware_id={firmware_id}, file_size={actual_file_size} bytes, file_path={firmware.file_path}, IP={client_ip}")
     
     # 创建一个生成器函数来流式传输文件并跟踪进度
     def generate_file():
         file_size = actual_file_size
         bytes_sent = 0
-        chunk_size = 2048  # 8KB chunks
-        last_percent = -1  # 设为-1确保第一次读取时会打印0%
+        chunk_size = 2048
+        last_percent = -1
+        start_time = time.time()
         
         with open(firmware.file_path, 'rb') as f:
             while True:
@@ -943,20 +1006,27 @@ def download_firmware(firmware_id):
                 bytes_sent += len(data)
                 percent = int((bytes_sent / file_size) * 100) if file_size > 0 else 100
                 
-                # 每1%打印一次进度
-                if percent != last_percent:
-                    print(f"Direct download progress: {percent}% ({bytes_sent}/{file_size} bytes)")
+                # 每10%打印一次进度
+                if percent >= last_percent + 10 or percent == 100:
+                    elapsed_time = time.time() - start_time
+                    speed = bytes_sent / elapsed_time if elapsed_time > 0 else 0
+                    app.logger.info(f"Download progress: firmware_id={firmware_id}, progress={percent}%, bytes_sent={bytes_sent}/{file_size}, speed={speed:.2f} bytes/s, IP={client_ip}")
                     last_percent = percent
                     
                 yield data
                 time.sleep(0.03)
+        
+        # 下载完成日志
+        total_time = time.time() - start_time
+        avg_speed = actual_file_size / total_time if total_time > 0 else 0
+        app.logger.info(f"Firmware download completed: firmware_id={firmware_id}, total_bytes={actual_file_size}, total_time={total_time:.2f}s, avg_speed={avg_speed:.2f} bytes/s, IP={client_ip}")
     
     # 使用流式响应
     filename = os.path.basename(firmware.file_path)
     headers = {
         'Content-Disposition': f'attachment; filename="{filename}"',
         'Content-Type': 'application/octet-stream',
-        'Content-Length': str(actual_file_size),  # 添加Content-Length头
+        'Content-Length': str(actual_file_size),
         'Connection': 'keep-alive',
         'keep-alive': 'timeout=5, max=1000'
     }
@@ -1003,13 +1073,13 @@ def download_firmware_chunk(firmware_id):
                 # 首次请求，打印开始下载信息
                 device = Device.get(firmware.device_id)
                 device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
-                print(f"Chunked download started: ID={firmware_id}, Version={firmware.version}, Device={device_info}")
-                print(f"Total file size: {firmware.file_size} bytes, Total chunks: {total_chunks}")
+                app.logger.info(f"Chunked download started: firmware_id={firmware_id}, version={firmware.version}, device={device_info}")
+                app.logger.info(f"Total file size: {firmware.file_size} bytes, Total chunks: {total_chunks}")
             
             # 每5%打印一次进度，或者是第一个和最后一个块
             if chunk_index == 0 or chunk_index == total_chunks - 1 or int(progress_percent) % 5 == 0:
                 bytes_downloaded = min(firmware.file_size, (chunk_index + 1) * chunk_size)
-                print(f"Download progress: {progress_percent}% ({bytes_downloaded}/{firmware.file_size} bytes, chunk {chunk_index+1}/{total_chunks})")
+                app.logger.info(f"Download progress: {progress_percent}% ({bytes_downloaded}/{firmware.file_size} bytes, chunk {chunk_index+1}/{total_chunks})")
             
             # 返回分块数据和元数据
             response = {
@@ -1024,7 +1094,7 @@ def download_firmware_chunk(firmware_id):
             
             return jsonify(response)
     except Exception as e:
-        print(f"Error in chunk download: {str(e)}")
+        app.logger.error(f"Error in chunk download: {str(e)}")
         return jsonify({'error': f'Error reading firmware file: {str(e)}'}), 500
 
 # 新增: 固件版本列表API
@@ -1151,49 +1221,55 @@ def update_device_status():
 @app.route('/admin/users', methods=['GET'])
 @login_required
 def admin_users():
-    # 检查管理员权限
     if not current_user.is_admin:
+        app.logger.warning(f"Unauthorized admin users access attempt: user_id={current_user.id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
         
     users = User.get_all()
+    app.logger.info(f"Admin users page accessed: admin_id={current_user.id}, total_users={len(users)}, IP={request.remote_addr}")
     return render_template('admin_users.html', users=users)
 
 @app.route('/admin/users/<user_id>/approve', methods=['POST'])
 @login_required
 def approve_user(user_id):
-    # 检查管理员权限
     if not current_user.is_admin:
+        app.logger.warning(f"Unauthorized user approval attempt: user_id={current_user.id}, target_user_id={user_id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
         
     user = User.get(user_id)
     if not user:
+        app.logger.warning(f"User approval failed - user not found: target_user_id={user_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('用户不存在')
         return redirect(url_for('admin_users'))
     
+    old_status = user.status
     user.status = 'approved'
     user.save()
+    app.logger.info(f"User approved: target_user_id={user_id}, username={user.username}, old_status={old_status}, admin_id={current_user.id}, IP={request.remote_addr}")
     flash(f'用户 {user.username} 已批准')
     return redirect(url_for('admin_users'))
 
 @app.route('/admin/users/<user_id>/reject', methods=['POST'])
 @login_required
 def reject_user(user_id):
-    # 检查管理员权限
     if not current_user.is_admin:
+        app.logger.warning(f"Unauthorized user rejection attempt: user_id={current_user.id}, target_user_id={user_id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
         
     user = User.get(user_id)
     if not user:
+        app.logger.warning(f"User rejection failed - user not found: target_user_id={user_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('用户不存在')
         return redirect(url_for('admin_users'))
     
+    old_status = user.status
     user.status = 'rejected'
     user.save()
+    app.logger.info(f"User rejected: target_user_id={user_id}, username={user.username}, old_status={old_status}, admin_id={current_user.id}, IP={request.remote_addr}")
     flash(f'用户 {user.username} 已拒绝')
-    app.logger.info(f"User {user.username} 已拒绝")
     return redirect(url_for('admin_users'))
 
 # Admin Route: Assign/Manage visible devices for a user
@@ -1316,17 +1392,19 @@ def get_device_versions(device_id):
 @app.route('/firmwares/delete/<firmware_id>', methods=['POST'])
 @login_required
 def delete_firmware(firmware_id):
+    app.logger.info(f"Firmware deletion attempt: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
+    
     firmware_to_delete = Firmware.get(firmware_id)
     
     if not firmware_to_delete:
+        app.logger.warning(f"Firmware deletion failed - firmware not found: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('固件不存在')
-        app.logger.warning(f"Attempt to delete non-existent firmware with ID: {firmware_id} by user {current_user.id}")
         return redirect(url_for('list_firmwares'))
     
     device_of_firmware = Device.get(firmware_to_delete.device_id)
     if not device_of_firmware: 
+        app.logger.error(f"Firmware deletion failed - device not found: firmware_id={firmware_id}, device_id={firmware_to_delete.device_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('固件关联的设备不存在。')
-        app.logger.error(f"Firmware {firmware_id} links to non-existent device {firmware_to_delete.device_id}. Deletion by {current_user.id}")
         return redirect(url_for('list_firmwares'))
 
     can_delete = False
@@ -1339,8 +1417,8 @@ def delete_firmware(firmware_id):
             can_delete = True
 
     if not can_delete:
+        app.logger.warning(f"Firmware deletion access denied: firmware_id={firmware_id}, device_model={device_of_firmware.model_number}, firmware_owner={firmware_to_delete.user_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('您没有权限删除此固件。')
-        app.logger.warning(f"User {current_user.id} unauthorized attempt to delete firmware {firmware_id} (device: {device_of_firmware.id}, model: {device_of_firmware.model_number}, owner: {firmware_to_delete.user_id})")
         device_id_for_redirect = request.args.get('device_id', firmware_to_delete.device_id)
         return redirect(url_for('list_firmwares', device_id=device_id_for_redirect) if device_id_for_redirect else url_for('list_firmwares'))
 
@@ -1349,9 +1427,9 @@ def delete_firmware(firmware_id):
     if os.path.exists(firmware_to_delete.file_path):
         try:
             os.remove(firmware_to_delete.file_path)
-            app.logger.info(f"Deleted firmware file: {firmware_to_delete.file_path}")
+            app.logger.info(f"Firmware file deleted: firmware_id={firmware_id}, file_path={firmware_to_delete.file_path}, user_id={current_user.id}")
         except OSError as e:
-            app.logger.error(f"Error deleting firmware file {firmware_to_delete.file_path}: {e}")
+            app.logger.error(f"Error deleting firmware file: firmware_id={firmware_id}, file_path={firmware_to_delete.file_path}, error={e}, user_id={current_user.id}")
             flash(f'删除固件文件失败: {e}')
     
     # 删除固件JSON文件
@@ -1359,13 +1437,13 @@ def delete_firmware(firmware_id):
     if os.path.exists(firmware_json_file_path):
         try:
             os.remove(firmware_json_file_path)
-            app.logger.info(f"Deleted firmware metadata file: {firmware_json_file_path}")
+            app.logger.info(f"Firmware metadata deleted: firmware_id={firmware_id}, metadata_path={firmware_json_file_path}, user_id={current_user.id}")
         except OSError as e:
-            app.logger.error(f"Error deleting firmware metadata file {firmware_json_file_path}: {e}")
+            app.logger.error(f"Error deleting firmware metadata: firmware_id={firmware_id}, metadata_path={firmware_json_file_path}, error={e}, user_id={current_user.id}")
             flash(f'删除固件元数据文件失败: {e}')
     
+    app.logger.info(f"Firmware deletion completed: firmware_id={firmware_id}, version={firmware_to_delete.version}, device_model={device_of_firmware.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
     flash('固件已成功删除')
-    app.logger.info(f"Firmware {firmware_id} (path {original_file_path}, version {firmware_to_delete.version}) deleted successfully by user {current_user.id}")
     
     # 如果是从设备固件列表页面删除，则返回到该页面
     device_id = request.args.get('device_id')
@@ -1378,14 +1456,19 @@ def delete_firmware(firmware_id):
 @app.route('/api/device/<device_id>/info', methods=['GET'])
 @login_required
 def get_device_info(device_id):
+    app.logger.info(f"Device info API request: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
+    
     device = Device.get(device_id)
     if not device:
+        app.logger.warning(f"Device info API failed - device not found: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
         return jsonify({'error': 'Device not found'}), 404
         
     # 检查权限
     if not current_user.is_admin and device.model_number not in current_user.visible_model_numbers:
+        app.logger.warning(f"Device info API access denied: device_id={device_id}, model_number={device.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
         return jsonify({'error': 'Access denied'}), 403
         
+    app.logger.info(f"Device info API success: device_id={device_id}, model_number={device.model_number}, device_type={device.device_type}, user_id={current_user.id}, IP={request.remote_addr}")
     return jsonify({
         'id': device.id,
         'model_number': device.model_number,
@@ -1414,23 +1497,27 @@ def check_device_type(device_id):
 @login_required
 def admin_set_device_type(device_id):
     if not current_user.is_admin:
+        app.logger.warning(f"Unauthorized device type change attempt: user_id={current_user.id}, device_id={device_id}, IP={request.remote_addr}")
         flash('您没有管理员权限。')
         return redirect(url_for('list_devices'))
 
     device = Device.get(device_id)
     if not device:
+        app.logger.warning(f"Device type change failed - device not found: device_id={device_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('设备不存在。')
         return redirect(url_for('list_devices'))
 
     new_type = request.form.get('device_type')
     if new_type not in ['device', 'wifi']:
+        app.logger.warning(f"Device type change failed - invalid type: device_id={device_id}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('无效的设备类型。')
         return redirect(url_for('list_devices'))
 
+    old_type = device.device_type
     device.device_type = new_type
     device.save()
+    app.logger.info(f"Device type changed: device_id={device_id}, model_number={device.model_number}, old_type={old_type}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
     flash(f'设备 {device.model_name} ({device.model_number}) 类型已更新为 {new_type}。')
-    app.logger.info(f"Admin {current_user.username} updated device type for {device.id} to {new_type}")
     return redirect(url_for('list_devices'))
 
 if __name__ == '__main__':
@@ -1439,29 +1526,24 @@ if __name__ == '__main__':
     
     # File Handler
     log_file = os.path.join(app.config['DATA_FOLDER'], 'app.log')
-    file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*5, backupCount=5)
+    file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*10, backupCount=10)  # 增加日志文件大小和备份数量
     file_handler.setFormatter(log_formatter)
     file_handler.setLevel(logging.INFO)
     
-    # Console Handler (for Flask's default logger, and optionally our app logger)
-    # Flask's default logger already logs to console when debug=True.
-    # If you want more control or to log app-specific messages to console even when debug=False:
+    # Console Handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_formatter)
-    console_handler.setLevel(logging.DEBUG) # Or logging.INFO for less verbosity
+    console_handler.setLevel(logging.DEBUG)
 
     # Add handlers to Flask app logger
     app.logger.addHandler(file_handler)
-    app.logger.addHandler(console_handler) # Add if you want app.logger messages on console too
-    app.logger.setLevel(logging.INFO) # Set root level for app.logger
+    app.logger.addHandler(console_handler)
+    app.logger.setLevel(logging.INFO)
 
-    # Werkzeug logger (handles request logs) can also be configured if needed
-    # By default, it logs to stderr. You can get its logger and add handlers:
-    # werkzeug_logger = logging.getLogger('werkzeug')
-    # werkzeug_logger.addHandler(file_handler)
-    # werkzeug_logger.setLevel(logging.INFO)
-
-    app.logger.info("Application startup")
+    app.logger.info("=== Firmware Server Application Starting ===")
+    app.logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+    app.logger.info(f"Data folder: {app.config['DATA_FOLDER']}")
+    app.logger.info(f"Max upload size: {app.config['MAX_CONTENT_LENGTH']} bytes")
 
     # 创建管理员账户（如果不存在）
     admin = User.get_by_username('admin')
@@ -1478,7 +1560,15 @@ if __name__ == '__main__':
             is_admin=True
         )
         admin.save()
-        app.logger.info('管理员账户已创建')
+        app.logger.info('Default admin account created: username=admin, password=admin123')
+    else:
+        app.logger.info('Admin account already exists')
+    
+    # 统计现有数据
+    all_users = User.get_all()
+    all_devices = Device.get_all()
+    all_firmwares = Firmware.get_all()
+    app.logger.info(f"System statistics: users={len(all_users)}, devices={len(all_devices)}, firmwares={len(all_firmwares)}")
     
     # 创建SSL上下文
     try:
@@ -1489,11 +1579,11 @@ if __name__ == '__main__':
         https_server = Thread(target=lambda: app.run(debug=False, host='0.0.0.0', port=3443, ssl_context=ssl_context))
         https_server.daemon = True
         https_server.start()
-        app.logger.info('HTTPS服务器已启动在端口3443')
+        app.logger.info('HTTPS server started on port 3443')
     except Exception as e:
-        app.logger.error(f'HTTPS服务器启动失败: {str(e)}')
-        app.logger.warning('请确保cert.pem和key.pem文件存在')
+        app.logger.error(f'HTTPS server startup failed: {str(e)}')
+        app.logger.warning('Please ensure cert.pem and key.pem files exist')
     
     # 启动HTTP服务器（主线程）
-    app.logger.info('HTTP服务器已启动在端口3001')
+    app.logger.info('HTTP server starting on port 3001')
     app.run(debug=True, host='0.0.0.0', port=3001, use_reloader=False)
