@@ -2,6 +2,6 @@
 /firmwares
 /logs
 /users
-/test
-/uploads
-/data
+test/
+uploads/
+data/
