@@ -528,11 +528,11 @@ def register():
         phone = request.form.get('phone')
         
         # 记录注册尝试
-        app.logger.info(f"Registration attempt: username={username}, company={company_name}, email={email}, phone={phone}, IP={request.remote_addr}")
+        app.logger.debug(f"Registration attempt: username={username}, company={company_name}, email={email}, phone={phone}, IP={request.remote_addr}")
         
         user_exists = User.get_by_username(username)
         if user_exists:
-            app.logger.warning(f"Registration failed - username already exists: {username}, IP={request.remote_addr}")
+            app.logger.debug(f"Registration failed - username already exists: {username}, IP={request.remote_addr}")
             flash('用户名已存在')
             return redirect(url_for('register'))
         
@@ -548,11 +548,11 @@ def register():
         
         new_user.save()
         
-        app.logger.info(f"User registration successful: ID={new_user.id}, username={username}, company={company_name}, IP={request.remote_addr}")
+        app.logger.debug(f"User registration successful: ID={new_user.id}, username={username}, company={company_name}, IP={request.remote_addr}")
         flash('注册成功，请等待管理员审核')
         return redirect(url_for('login'))
     
-    app.logger.info(f"Registration page accessed from IP={request.remote_addr}")
+    app.logger.debug(f"Registration page accessed from IP={request.remote_addr}")
     return render_template('register.html')
 
 # 路由: 用户登录
@@ -562,30 +562,30 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        app.logger.info(f"Login attempt: username={username}, IP={request.remote_addr}, User-Agent={request.headers.get('User-Agent', 'Unknown')}")
+        app.logger.debug(f"Login attempt: username={username}, IP={request.remote_addr}, User-Agent={request.headers.get('User-Agent', 'Unknown')}")
         
         user = User.get_by_username(username)
         
         if not user:
-            app.logger.warning(f"Login failed - user not found: username={username}, IP={request.remote_addr}")
+            app.logger.debug(f"Login failed - user not found: username={username}, IP={request.remote_addr}")
             flash('用户名或密码错误')
             return redirect(url_for('login'))
             
         if not check_password_hash(user.password, password):
-            app.logger.warning(f"Login failed - incorrect password: username={username}, IP={request.remote_addr}")
+            app.logger.debug(f"Login failed - incorrect password: username={username}, IP={request.remote_addr}")
             flash('用户名或密码错误')
             return redirect(url_for('login'))
         
         if user.status != 'approved' and not user.is_admin:
-            app.logger.warning(f"Login failed - user not approved: username={username}, status={user.status}, IP={request.remote_addr}")
+            app.logger.debug(f"Login failed - user not approved: username={username}, status={user.status}, IP={request.remote_addr}")
             flash('您的账户尚未获得批准')
             return redirect(url_for('login'))
         
         login_user(user)
-        app.logger.info(f"Login successful: user_id={user.id}, username={username}, is_admin={user.is_admin}, IP={request.remote_addr}")
+        app.logger.debug(f"Login successful: user_id={user.id}, username={username}, is_admin={user.is_admin}, IP={request.remote_addr}")
         return redirect(url_for('dashboard'))
     
-    app.logger.info(f"Login page accessed from IP={request.remote_addr}")
+    app.logger.debug(f"Login page accessed from IP={request.remote_addr}")
     return render_template('login.html')
 
 # 路由: 用户登出
@@ -1356,7 +1356,7 @@ def get_device_versions(device_id):
         is_authorized = True
 
     if not is_authorized:
-        app.logger.warning(f"User {current_user.id} unauthorized API attempt for device versions: {device_id} (model: {target_device_instance.model_number})")
+        app.logger.debug(f"User {current_user.id} unauthorized API attempt for device versions: {device_id} (model: {target_device_instance.model_number})")
         return jsonify({'error': 'Access denied to this device model versions'}), 403
 
     # 获取固件类型参数
@@ -1497,28 +1497,95 @@ def check_device_type(device_id):
 @login_required
 def admin_set_device_type(device_id):
     if not current_user.is_admin:
-        app.logger.warning(f"Unauthorized device type change attempt: user_id={current_user.id}, device_id={device_id}, IP={request.remote_addr}")
+        app.logger.debug(f"Unauthorized device type change attempt: user_id={current_user.id}, device_id={device_id}, IP={request.remote_addr}")
         flash('您没有管理员权限。')
         return redirect(url_for('list_devices'))
 
     device = Device.get(device_id)
     if not device:
-        app.logger.warning(f"Device type change failed - device not found: device_id={device_id}, admin_id={current_user.id}, IP={request.remote_addr}")
+        app.logger.debug(f"Device type change failed - device not found: device_id={device_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('设备不存在。')
         return redirect(url_for('list_devices'))
 
     new_type = request.form.get('device_type')
     if new_type not in ['device', 'wifi']:
-        app.logger.warning(f"Device type change failed - invalid type: device_id={device_id}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
+        app.logger.debug(f"Device type change failed - invalid type: device_id={device_id}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('无效的设备类型。')
         return redirect(url_for('list_devices'))
 
     old_type = device.device_type
     device.device_type = new_type
     device.save()
-    app.logger.info(f"Device type changed: device_id={device_id}, model_number={device.model_number}, old_type={old_type}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
+    app.logger.debug(f"Device type changed: device_id={device_id}, model_number={device.model_number}, old_type={old_type}, new_type={new_type}, admin_id={current_user.id}, IP={request.remote_addr}")
     flash(f'设备 {device.model_name} ({device.model_number}) 类型已更新为 {new_type}。')
     return redirect(url_for('list_devices'))
+
+# 添加固件编辑路由
+@app.route('/firmwares/edit/<firmware_id>', methods=['GET', 'POST'])
+@login_required
+def edit_firmware(firmware_id):
+    app.logger.debug(f"Firmware edit attempt: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
+    
+    firmware = Firmware.get(firmware_id)
+    if not firmware:
+        app.logger.debug(f"Firmware edit failed - firmware not found: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
+        flash('固件不存在')
+        return redirect(url_for('list_firmwares'))
+    
+    device = Device.get(firmware.device_id)
+    if not device:
+        app.logger.debug(f"Firmware edit failed - device not found: firmware_id={firmware_id}, device_id={firmware.device_id}, user_id={current_user.id}, IP={request.remote_addr}")
+        flash('固件关联的设备不存在。')
+        return redirect(url_for('list_firmwares'))
+
+    # 检查权限
+    can_edit = False
+    if current_user.is_admin:
+        can_edit = True
+    else:
+        is_authorized_for_model = device.model_number in current_user.visible_model_numbers
+        is_firmware_owner = firmware.user_id == current_user.id
+        if is_authorized_for_model and is_firmware_owner:
+            can_edit = True
+
+    if not can_edit:
+        app.logger.debug(f"Firmware edit access denied: firmware_id={firmware_id}, device_model={device.model_number}, firmware_owner={firmware.user_id}, user_id={current_user.id}, IP={request.remote_addr}")
+        flash('您没有权限编辑此固件。')
+        return redirect(url_for('list_firmwares', device_id=firmware.device_id))
+
+    # 获取所有同设备的固件版本用于兼容性选择
+    all_device_firmwares = Firmware.get_all(device_id=firmware.device_id)
+    compatible_firmware_options = [f for f in all_device_firmwares if f.id != firmware.id and f.is_wifi_firmware == firmware.is_wifi_firmware and f.is_device_firmware == firmware.is_device_firmware]
+
+    if request.method == 'POST':
+        description = request.form.get('description')
+        status = request.form.get('status')
+        compatible_versions = request.form.getlist('compatible_versions')
+        
+        app.logger.debug(f"Firmware edit data: firmware_id={firmware_id}, description={description}, status={status}, compatible_versions={compatible_versions}, user_id={current_user.id}")
+        
+        # 验证状态
+        if status not in ['active', 'inactive', 'deprecated']:
+            flash('无效的固件状态')
+            return redirect(request.url)
+        
+        # 更新固件信息
+        old_description = firmware.description
+        old_status = firmware.status
+        old_compatible = firmware.compatible_versions
+        
+        firmware.description = description
+        firmware.status = status
+        firmware.compatible_versions = compatible_versions
+        firmware.save()
+        
+        app.logger.debug(f"Firmware updated: firmware_id={firmware_id}, old_desc='{old_description}', new_desc='{description}', old_status={old_status}, new_status={status}, old_compatible={old_compatible}, new_compatible={compatible_versions}, user_id={current_user.id}, IP={request.remote_addr}")
+        
+        flash('固件信息已更新')
+        return redirect(url_for('list_firmwares', device_id=firmware.device_id))
+    
+    app.logger.debug(f"Firmware edit page accessed: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
+    return render_template('edit_firmware.html', firmware=firmware, device=device, compatible_firmware_options=compatible_firmware_options)
 
 if __name__ == '__main__':
     # Setup logging
@@ -1526,9 +1593,9 @@ if __name__ == '__main__':
     
     # File Handler
     log_file = os.path.join(app.config['DATA_FOLDER'], 'app.log')
-    file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*10, backupCount=10)  # 增加日志文件大小和备份数量
+    file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*10, backupCount=10)
     file_handler.setFormatter(log_formatter)
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)  # 改为DEBUG级别
     
     # Console Handler
     console_handler = logging.StreamHandler()
@@ -1538,9 +1605,9 @@ if __name__ == '__main__':
     # Add handlers to Flask app logger
     app.logger.addHandler(file_handler)
     app.logger.addHandler(console_handler)
-    app.logger.setLevel(logging.INFO)
+    app.logger.setLevel(logging.DEBUG)  # 改为DEBUG级别
 
-    app.logger.info("=== Firmware Server Application Starting ===")
+    app.logger.info("=== Firmware Server Application Starting ===")  # 启动日志保持info
     app.logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     app.logger.info(f"Data folder: {app.config['DATA_FOLDER']}")
     app.logger.info(f"Max upload size: {app.config['MAX_CONTENT_LENGTH']} bytes")

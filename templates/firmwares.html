@@ -7,21 +7,25 @@
 
 {% block content %}
 <div class="container mt-4">
-    {% if device %}
-        <h2>固件列表: {{ device.model_name }} (型号: {{ device.model_number }})</h2>
-        <p>
-            <a href="{{ url_for('list_devices') }}" class="btn btn-sm btn-outline-secondary mb-2">返回设备列表</a>
-            <a href="{{ url_for('upload_firmware', device_id=device.id) }}" class="btn btn-primary mb-2">上传新固件到此设备</a>
-        </p>
-    {% elif view_all %}
-        <h2>所有可访问固件</h2>
-         <a href="{{ url_for('upload_firmware') }}" class="btn btn-primary mb-2">上传新固件</a>
-    {% else %}
-        <h2>固件管理</h2>
-        <p>没有指定设备，显示您有权限访问的所有固件。</p>
-         <a href="{{ url_for('upload_firmware') }}" class="btn btn-primary mb-2">上传新固件</a>
-    {% endif %}
-    <hr>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            {% if device %}
+                {{ device.model_name }} ({{ device.model_number }}) - 固件列表
+            {% else %}
+                所有固件列表
+            {% endif %}
+        </h2>
+        <div>
+            {% if device and (current_user.is_admin or device.model_number in current_user.visible_model_numbers) %}
+                <a href="{{ url_for('upload_firmware') }}?device_id={{ device.id }}" class="btn btn-primary">上传新固件</a>
+            {% elif not device and current_user.is_admin %}
+                <a href="{{ url_for('upload_firmware') }}" class="btn btn-primary">上传新固件</a>
+            {% endif %}
+            {% if device %}
+                <a href="{{ url_for('list_devices') }}" class="btn btn-secondary">返回设备列表</a>
+            {% endif %}
+        </div>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -35,119 +39,140 @@
     {% endwith %}
 
     {% if firmwares %}
-        {% if view_all %}
-            {# Displaying firmwares grouped by device #}
-            {% set devices_to_render = (all_devices_map if current_user.is_admin else visible_devices_map) %}
-            {% for dev_id, device_obj in devices_to_render.items() %}
-                {% set device_firmwares = firmwares|selectattr('device_id', 'equalto', dev_id)|list %}
-                {% if device_firmwares %}
-                    <div class="card mb-4">
-                        <div class="card-header">
-                           设备: <strong>{{ device_obj.model_name }}</strong> (型号: {{ device_obj.model_number }})
-                           <a href="{{ url_for('list_firmwares', device_id=dev_id) }}" class="btn btn-sm btn-outline-primary float-end">查看此设备固件</a>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>版本</th>
-                                            <th>描述</th>
-                                            <th>类型</th>
-                                            <th>CRC</th>
-                                            <th>大小 (bytes)</th>
-                                            <th>创建时间</th>
-                                            <th>上传者</th>
-                                            <th>操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for firmware_item in device_firmwares %}
-                                        <tr>
-                                            <td>{{ firmware_item.version }}</td>
-                                            <td>{{ firmware_item.description }}</td>
-                                            <td>
-                                                {% if firmware_item.is_wifi_firmware %}WiFi {% endif %}
-                                                {% if firmware_item.is_device_firmware %}设备 {% endif %}
-                                            </td>
-                                            <td>{{ firmware_item.crc_checksum }}</td>
-                                            <td>{{ firmware_item.file_size }}</td>
-                                            <td>{{ firmware_item.created_at.strftime('%Y-%m-%d %H:%M') if firmware_item.created_at else 'N/A' }}</td>
-                                            <td>
-                                                {% set uploader = get_user(firmware_item.user_id) %}
-                                                {{ uploader.username if uploader else '未知' }}
-                                            </td>
-                                            <td>
-                                                <form action="{{ url_for('delete_firmware', firmware_id=firmware_item.id, device_id=firmware_item.device_id) }}" method="POST" onsubmit="return confirm('确定要删除此固件吗？');" style="display: inline;">
-                                                    <button type="submit" class="btn btn-danger btn-sm">删除</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-            {% endfor %}
-        {% else %}
-            {# Displaying firmwares for a single device (device object is passed) #}
-             <div class="card mb-4">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead>
-                                <tr>
-                                    <th>版本</th>
-                                    <th>描述</th>
-                                    <th>类型</th>
-                                    <th>CRC</th>
-                                    <th>大小 (bytes)</th>
-                                    <th>创建时间</th>
-                                    <th>上传者</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            {% for firmware_item in firmwares %} {# Corrected variable name from firmware to firmware_item #}
-                                <tr>
-                                    <td>{{ firmware_item.version }}</td>
-                                    <td>{{ firmware_item.description }}</td>
-                                    <td>
-                                        {% if firmware_item.is_wifi_firmware %}WiFi {% endif %}
-                                        {% if firmware_item.is_device_firmware %}设备 {% endif %}
-                                    </td>
-                                    <td>{{ firmware_item.crc_checksum }}</td>
-                                    <td>{{ firmware_item.file_size }}</td>
-                                    <td>{{ firmware_item.created_at.strftime('%Y-%m-%d %H:%M:%S') if firmware_item.created_at else 'N/A' }}</td> {# Fixed formatting here #}
-                                    <td>
-                                        {% set uploader = get_user(firmware_item.user_id) %}
-                                        {{ uploader.username if uploader else '未知' }}
-                                    </td>
-                                    <td>
-                                        <form action="{{ url_for('delete_firmware', firmware_id=firmware_item.id, device_id=firmware_item.device_id) }}" method="POST" onsubmit="return confirm('确定要删除此固件吗？');" style="display: inline;">
-                                            <button type="submit" class="btn btn-danger btn-sm">删除</button>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>版本</th>
+                        {% if not device %}
+                            <th>设备</th>
+                        {% endif %}
+                        <th>类型</th>
+                        <th>文件大小</th>
+                        <th>状态</th>
+                        <th>兼容版本</th>
+                        <th>上传时间</th>
+                        <th>描述</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for firmware_item in firmwares %}
+                        <tr>
+                            <td>
+                                <strong>{{ firmware_item.version }}</strong>
+                                <br>
+                                <small class="text-muted">CRC: {{ firmware_item.crc_checksum }}</small>
+                            </td>
+                            {% if not device %}
+                                <td>
+                                    {% if all_devices_map and firmware_item.device_id in all_devices_map %}
+                                        {{ all_devices_map[firmware_item.device_id].model_name }}
+                                        <br>
+                                        <small class="text-muted">{{ all_devices_map[firmware_item.device_id].model_number }}</small>
+                                    {% elif visible_devices_map and firmware_item.device_id in visible_devices_map %}
+                                        {{ visible_devices_map[firmware_item.device_id].model_name }}
+                                        <br>
+                                        <small class="text-muted">{{ visible_devices_map[firmware_item.device_id].model_number }}</small>
+                                    {% else %}
+                                        <span class="text-muted">未知设备</span>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                            <td>
+                                {% if firmware_item.is_wifi_firmware %}
+                                    <span class="badge bg-info">WiFi固件</span>
+                                {% else %}
+                                    <span class="badge bg-primary">设备固件</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(firmware_item.file_size / 1024 / 1024) }} MB</td>
+                            <td>
+                                {% if firmware_item.status == 'active' %}
+                                    <span class="badge bg-success">活跃</span>
+                                {% elif firmware_item.status == 'inactive' %}
+                                    <span class="badge bg-warning">非活跃</span>
+                                {% elif firmware_item.status == 'deprecated' %}
+                                    <span class="badge bg-danger">已弃用</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ firmware_item.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if firmware_item.compatible_versions %}
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            {{ firmware_item.compatible_versions|length }} 个版本
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            {% for compatible_version in firmware_item.compatible_versions %}
+                                                <li><span class="dropdown-item-text">{{ compatible_version }}</span></li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">无</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ firmware_item.created_at.strftime('%Y-%m-%d %H:%M') if firmware_item.created_at else 'N/A' }}</td>
+                            <td>
+                                {% if firmware_item.description %}
+                                    <span title="{{ firmware_item.description }}">
+                                        {{ firmware_item.description[:50] }}{% if firmware_item.description|length > 50 %}...{% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">无描述</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <!-- 编辑按钮 -->
+                                    {% if current_user.is_admin or (firmware_item.user_id == current_user.id and (device and device.model_number in current_user.visible_model_numbers)) %}
+                                        <a href="{{ url_for('edit_firmware', firmware_id=firmware_item.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="编辑固件">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    {% endif %}
+                                    
+                                    <!-- 下载按钮 -->
+                                    <a href="{{ url_for('download_firmware', firmware_id=firmware_item.id) }}" 
+                                       class="btn btn-sm btn-outline-success" title="下载固件">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    
+                                    <!-- 删除按钮 -->
+                                    {% if current_user.is_admin or (firmware_item.user_id == current_user.id and (device and device.model_number in current_user.visible_model_numbers)) %}
+                                        <form method="POST" action="{{ url_for('delete_firmware', firmware_id=firmware_item.id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('确定要删除固件版本 {{ firmware_item.version }} 吗？此操作不可恢复。')">
+                                            {% if device %}
+                                                <input type="hidden" name="device_id" value="{{ device.id }}">
+                                            {% endif %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="删除固件">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
                                         </form>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% else %}
-        <div class="alert alert-info">当前没有固件信息。
-            {% if device %}
-            <a href="{{ url_for('upload_firmware', device_id=device.id) }}" class="alert-link">上传第一个固件到此设备？</a>
-            {% elif not current_user.is_admin and not current_user.visible_device_ids %}
-             您尚未被分配任何设备的固件管理权限。
-            {% else %}
-            <a href="{{ url_for('upload_firmware') }}" class="alert-link">上传一个固件？</a>
+        <div class="alert alert-info">
+            <h5>暂无固件</h5>
+            <p>{% if device %}此设备还没有上传任何固件。{% else %}系统中还没有任何固件。{% endif %}</p>
+            {% if device and (current_user.is_admin or device.model_number in current_user.visible_model_numbers) %}
+                <a href="{{ url_for('upload_firmware') }}?device_id={{ device.id }}" class="btn btn-primary">立即上传</a>
+            {% elif not device and current_user.is_admin %}
+                <a href="{{ url_for('upload_firmware') }}" class="btn btn-primary">立即上传</a>
             {% endif %}
         </div>
     {% endif %}
 </div>
+
+<!-- 添加Font Awesome图标支持 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %} 

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}编辑固件{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h4>编辑固件</h4>
+                    <small class="text-muted">设备: {{ device.model_name }} ({{ device.model_number }})</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="version" class="form-label">版本号</label>
+                                    <input type="text" class="form-control" id="version" value="{{ firmware.version }}" readonly>
+                                    <small class="form-text text-muted">版本号不可修改</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="status" class="form-label">状态</label>
+                                    <select class="form-select" id="status" name="status" required>
+                                        <option value="active" {% if firmware.status == 'active' %}selected{% endif %}>活跃</option>
+                                        <option value="inactive" {% if firmware.status == 'inactive' %}selected{% endif %}>非活跃</option>
+                                        <option value="deprecated" {% if firmware.status == 'deprecated' %}selected{% endif %}>已弃用</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">描述</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ firmware.description }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">固件信息</label>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small class="text-muted">文件大小: {{ "%.2f"|format(firmware.file_size / 1024 / 1024) }} MB</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">CRC校验: {{ firmware.crc_checksum }}</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">类型: {% if firmware.is_wifi_firmware %}WiFi固件{% else %}设备固件{% endif %}</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">兼容版本</label>
+                            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                {% if compatible_firmware_options %}
+                                    {% for compatible_fw in compatible_firmware_options %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="compatible_versions" 
+                                               value="{{ compatible_fw.version }}" 
+                                               id="compatible_{{ compatible_fw.id }}"
+                                               {% if compatible_fw.version in firmware.compatible_versions %}checked{% endif %}>
+                                        <label class="form-check-label" for="compatible_{{ compatible_fw.id }}">
+                                            {{ compatible_fw.version }}
+                                            <small class="text-muted">({{ compatible_fw.created_at.strftime('%Y-%m-%d') }})</small>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted mb-0">暂无其他版本可选择</p>
+                                {% endif %}
+                            </div>
+                            <small class="form-text text-muted">选择此固件兼容的其他版本</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="selectAllCompatible">
+                                <label class="form-check-label" for="selectAllCompatible">
+                                    全选/取消全选兼容版本
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('list_firmwares', device_id=firmware.device_id) }}" class="btn btn-secondary">返回</a>
+                            <button type="submit" class="btn btn-primary">保存更改</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 全选/取消全选功能
+    const selectAllCheckbox = document.getElementById('selectAllCompatible');
+    const compatibleCheckboxes = document.querySelectorAll('input[name="compatible_versions"]');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        compatibleCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+    
+    // 监听单个复选框变化，更新全选状态
+    compatibleCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const checkedCount = document.querySelectorAll('input[name="compatible_versions"]:checked').length;
+            selectAllCheckbox.checked = checkedCount === compatibleCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < compatibleCheckboxes.length;
+        });
+    });
+    
+    // 初始化全选状态
+    const checkedCount = document.querySelectorAll('input[name="compatible_versions"]:checked').length;
+    selectAllCheckbox.checked = checkedCount === compatibleCheckboxes.length;
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < compatibleCheckboxes.length;
+});
+</script>
+{% endblock %} 
