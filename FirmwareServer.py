@@ -179,12 +179,13 @@ class User(UserMixin):
 # 设备模型
 class Device:
     def __init__(self, id, model_number, model_name, description, user_id, 
-                 created_at=None, updated_at=None):
+                 created_at=None, updated_at=None, device_type='device'):
         self.id = id
         self.model_number = model_number
         self.model_name = model_name
         self.description = description
         self.user_id = user_id
+        self.device_type = device_type
         
         if isinstance(created_at, str):
             try:
@@ -213,6 +214,7 @@ class Device:
             'model_name': self.model_name,
             'description': self.description,
             'user_id': self.user_id,
+            'device_type': self.device_type,
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime.datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime.datetime) else self.updated_at
         }
@@ -241,6 +243,7 @@ class Device:
             model_name=data['model_name'],
             description=data['description'],
             user_id=data['user_id'],
+            device_type=data.get('device_type', 'device'),
             created_at=created_at_obj,
             updated_at=updated_at_obj
         )
@@ -600,8 +603,9 @@ def add_device():
         model_number = request.form.get('model_number')
         model_name = request.form.get('model_name')
         description = request.form.get('description')
+        device_type = request.form.get('device_type', 'device')  # 获取设备类型
         
-        device_exists = Device.get_by_model_number(model_number, user_id=current_user.id)
+        device_exists = Device.get_by_model_number(model_number)
         if device_exists:
             flash('该型号已存在')
             return redirect(url_for('add_device'))
@@ -611,7 +615,8 @@ def add_device():
             model_number=model_number,
             model_name=model_name,
             description=description,
-            user_id=current_user.id
+            user_id=current_user.id,
+            device_type=device_type  # 设置设备类型
         )
         
         new_device.save()
@@ -676,15 +681,23 @@ def list_firmwares():
             devices_map = {dev.id: dev for dev in authorized_devices_instances}
             return render_template('firmwares.html', firmwares=firmwares_to_display, visible_devices_map=devices_map, view_all=True)
 
-# 验证版本格式是否符合 x.x.x
-def validate_version_format(version):
-    return version.isdigit()
+# 修改版本验证函数
+def validate_version_format(version, device_type):
+    """
+    根据设备类型验证版本格式
+    :param version: 版本号字符串
+    :param device_type: 设备类型 ('wifi' 或 'device')
+    :return: bool
+    """
+    if device_type == 'wifi':
+        # WiFi固件版本格式: x.x.x (如 1.0.0)
+        pattern = r'^\d+\.\d+\.\d+$'
+        return bool(re.match(pattern, version))
+    else:
+        # 设备固件版本格式: 纯数字 (如 100)
+        return version.isdigit()
 
-def validate_wifiversion_format(version):
-    pattern = r'^\d+\.\d+\.\d+$'
-    return re.match(pattern, version) is not None
-
-# 路由: 上传固件
+# 修改上传固件路由中的版本验证部分
 @app.route('/firmwares/upload', methods=['GET', 'POST'])
 @login_required
 def upload_firmware():
@@ -701,82 +714,46 @@ def upload_firmware():
         device_id = request.form.get('device_id')
         version = request.form.get('version')
         description = request.form.get('description')
-        firmware_type = request.form.get('firmware_type')
-        compatible_versions_selected = request.form.getlist('compatible_versions')
-        manual_compatible_version_input = request.form.get('manual_compatible_version', '').strip()
         
-        # 验证版本格式
-        if not validate_version_format(version):
-            flash('版本格式必须为 x.x.x（如 1.0.0）')
-            return redirect(request.url)
-        
-        # 验证选中兼容版本格式
-        for cv in compatible_versions_selected:
-            if not validate_version_format(cv):
-                flash(f'选中的兼容版本 {cv} 格式不正确')
-                return redirect(request.url)
-        
-        # 处理手动输入的兼容版本 (如果提供了)
-        manual_versions = []
-        if manual_compatible_version_input:
-            # Split by semicolon and remove empty strings
-            potential_versions = [v.strip() for v in manual_compatible_version_input.split(';') if v.strip()]
-            for mv in potential_versions:
-                if not validate_version_format(mv):
-                    flash(f'手动输入的兼容版本 {mv} 格式不正确，必须为 x.x.x')
-                    return redirect(request.url)
-                manual_versions.append(mv)
-        
-        if 'firmware_file' not in request.files:
-            flash('没有选择文件')
-            return render_template('upload_firmware.html', devices=devices_for_form)
-        
-        file_from_request = request.files['firmware_file']
-        if file_from_request.filename == '':
-            flash('没有选择文件')
-            return render_template('upload_firmware.html', devices=devices_for_form)
-        
-        # 检查设备是否存在 and user authorization
+        # 获取设备信息并确定固件类型
         target_device_instance = next((d for d in all_system_devices if d.id == device_id), None)
-        
         if not target_device_instance:
             flash('选择的设备不存在。')
             return render_template('upload_firmware.html', devices=devices_for_form)
-
-        is_authorized_for_device_model = False
-        if current_user.is_admin:
-            is_authorized_for_device_model = True
-        elif target_device_instance.model_number in current_user.visible_model_numbers:
-            is_authorized_for_device_model = True
-
-        if not is_authorized_for_device_model:
-            flash('您无权为此设备的型号上传固件。')
-            return render_template('upload_firmware.html', devices=devices_for_form)
-        
-        # 检查版本是否已存在
+            
+        # 根据设备类型确定固件类型
+        firmware_type = target_device_instance.device_type
         is_wifi = firmware_type == 'wifi'
         is_device = firmware_type == 'device'
         
+        # 验证版本格式
+        if not validate_version_format(version, firmware_type):
+            if firmware_type == 'wifi':
+                flash('WiFi固件版本格式必须为 x.x.x（如 1.0.0）')
+            else:
+                flash('设备固件版本必须为纯数字（如 100）')
+            return redirect(request.url)
+            
         # 检查是否已存在相同版本的固件
         existing_firmwares = Firmware.get_all(device_id=device_id)
         for firmware in existing_firmwares:
             if firmware.version == version and firmware.is_wifi_firmware == is_wifi and firmware.is_device_firmware == is_device:
                 flash('该版本固件已存在')
                 return redirect(url_for('upload_firmware'))
+
+        # --- Make sure file is selected ---
+        if 'firmware_file' not in request.files:
+            flash('没有选择文件')
+            # Pass existing form data back to the template for better UX
+            return render_template('upload_firmware.html', devices=devices_for_form, 
+                                   selected_device_id=device_id, version=version, description=description)
         
-        # 验证兼容版本是否存在于该设备的固件中 (只验证选中的)
-        # 注意: 我们不再验证手动输入的版本是否已存在, 允许手动输入任何格式正确的版本
-        valid_compatible_versions = []
-        for cv in compatible_versions_selected:
-            for ef in existing_firmwares:
-                if ef.version == cv and ef.is_wifi_firmware == is_wifi and ef.is_device_firmware == is_device:
-                    if cv not in valid_compatible_versions: # Ensure uniqueness from selection
-                         valid_compatible_versions.append(cv)
-                    break # Found this version, move to next selected one
-        
-        # 添加手动输入的有效兼容版本 (如果提供了且不在列表中)
-        # Combine selected and manual versions, ensuring uniqueness
-        combined_compatible_versions = list(set(valid_compatible_versions + manual_versions))
+        file_from_request = request.files['firmware_file']
+        if file_from_request.filename == '':
+            flash('没有选择文件')
+            return render_template('upload_firmware.html', devices=devices_for_form,
+                                   selected_device_id=device_id, version=version, description=description)
+        # --- End file selection check ---
         
         # 保存文件
         filename = secure_filename(f"{target_device_instance.model_number}_{firmware_type}_{version}_{uuid.uuid4()}.bin")
@@ -799,8 +776,7 @@ def upload_firmware():
             is_wifi_firmware=is_wifi,
             is_device_firmware=is_device,
             status='active',
-            user_id=current_user.id,
-            compatible_versions=combined_compatible_versions
+            user_id=current_user.id
         )
         
         new_firmware.save()
@@ -833,11 +809,11 @@ def check_firmware():
         return jsonify({'error': 'Missing required fields'}), 400
     
     # 验证版本格式
-    if not validate_version_format(device_version):
+    if not validate_version_format(device_version, 'device'):
         print("Invalid device version format, must be x.x.x")
         return jsonify({'error': 'Invalid device version format, must be x.x.x'}), 400
     
-    if not validate_wifiversion_format(wifi_version):
+    if not validate_version_format(wifi_version, 'wifi'):
         print("Invalid WiFi version format, must be x.x.x")
         return jsonify({'error': 'Invalid WiFi version format, must be x.x.x'}), 400
     
@@ -1132,7 +1108,7 @@ def register_device():
         return jsonify({'error': 'Missing required fields'}), 400
     
     # 验证固件版本格式（如果提供）
-    if firmware_version and not validate_version_format(firmware_version):
+    if firmware_version and not validate_version_format(firmware_version, 'device'):
         return jsonify({'error': 'Invalid firmware version format, must be x.x.x'}), 400
     
     # 查找设备型号
@@ -1397,6 +1373,65 @@ def delete_firmware(firmware_id):
         return redirect(url_for('list_firmwares', device_id=device_id))
     else:
         return redirect(url_for('list_firmwares'))
+
+# 添加设备信息API
+@app.route('/api/device/<device_id>/info', methods=['GET'])
+@login_required
+def get_device_info(device_id):
+    device = Device.get(device_id)
+    if not device:
+        return jsonify({'error': 'Device not found'}), 404
+        
+    # 检查权限
+    if not current_user.is_admin and device.model_number not in current_user.visible_model_numbers:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    return jsonify({
+        'id': device.id,
+        'model_number': device.model_number,
+        'model_name': device.model_name,
+        'device_type': device.device_type
+    })
+
+@app.route('/api/device/check_type/<device_id>')
+@login_required
+def check_device_type(device_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Permission denied'}), 403
+        
+    device = Device.get(device_id)
+    if not device:
+        return jsonify({'error': 'Device not found'}), 404
+        
+    return jsonify({
+        'id': device.id,
+        'model_number': device.model_number,
+        'model_name': device.model_name,
+        'device_type': device.device_type
+    })
+
+@app.route('/admin/devices/<device_id>/set_type', methods=['POST'])
+@login_required
+def admin_set_device_type(device_id):
+    if not current_user.is_admin:
+        flash('您没有管理员权限。')
+        return redirect(url_for('list_devices'))
+
+    device = Device.get(device_id)
+    if not device:
+        flash('设备不存在。')
+        return redirect(url_for('list_devices'))
+
+    new_type = request.form.get('device_type')
+    if new_type not in ['device', 'wifi']:
+        flash('无效的设备类型。')
+        return redirect(url_for('list_devices'))
+
+    device.device_type = new_type
+    device.save()
+    flash(f'设备 {device.model_name} ({device.model_number}) 类型已更新为 {new_type}。')
+    app.logger.info(f"Admin {current_user.username} updated device type for {device.id} to {new_type}")
+    return redirect(url_for('list_devices'))
 
 if __name__ == '__main__':
     # Setup logging

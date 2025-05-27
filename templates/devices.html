@@ -28,6 +28,7 @@
                         <th>型号</th>
                         <th>设备名称</th>
                         <th>描述</th>
+                        <th>设备类型</th>
                         <th>创建时间</th>
                         <th>操作</th>
                     </tr>
@@ -38,11 +39,26 @@
                         <td>{{ device.model_number }}</td>
                         <td>{{ device.model_name }}</td>
                         <td>{{ device.description }}</td>
+                        <td>
+                            {% if device.device_type == 'wifi' %}
+                                WiFi模块
+                            {% else %}
+                                普通设备
+                            {% endif %}
+                            {% if current_user.is_admin %}
+                                <form method="POST" action="{{ url_for('admin_set_device_type', device_id=device.id) }}" style="display: inline; margin-left: 10px;">
+                                    <select name="device_type" class="form-select form-select-sm" onchange="this.form.submit()" style="width: auto; display: inline;">
+                                        <option value="device" {% if device.device_type == 'device' or not device.device_type %}selected{% endif %}>普通设备</option>
+                                        <option value="wifi" {% if device.device_type == 'wifi' %}selected{% endif %}>WiFi模块</option>
+                                    </select>
+                                </form>
+                            {% endif %}
+                        </td>
                         <td>{{ device.created_at.strftime('%Y-%m-%d %H:%M:%S') if device.created_at else 'N/A' }}</td>
                         <td>
                             <a href="{{ url_for('list_firmwares', device_id=device.id) }}" class="btn btn-info btn-sm">查看固件</a>
                             {% if current_user.is_admin %}
-                            <form action="{{ url_for('delete_device', device_id=device.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('确定要删除此设备及其所有固件吗？');">
+                            <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除这个设备及其所有固件吗？');">
                                 <button type="submit" class="btn btn-danger btn-sm">删除设备</button>
                             </form>
                             {% endif %}
