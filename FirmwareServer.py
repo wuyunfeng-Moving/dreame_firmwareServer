@@ -751,68 +751,110 @@ def upload_firmware():
         version = request.form.get('version')
         description = request.form.get('description')
         
-        app.logger.info(f"Firmware upload attempt: user_id={current_user.id}, device_id={device_id}, version={version}, IP={request.remote_addr}")
+        # Get compatible versions from checkboxes
+        checkbox_compatible_versions = request.form.getlist('compatible_versions')
+        
+        # Get compatible versions from manual input
+        manual_compatible_versions_str = request.form.get('manual_compatible_version', '').strip()
+        manual_compatible_versions_list = []
+        if manual_compatible_versions_str:
+            manual_compatible_versions_list = [v.strip() for v in manual_compatible_versions_str.split(';') if v.strip()]
+
+        app.logger.debug(f"Firmware upload attempt: user_id={current_user.id}, device_id={device_id}, version={version}, checkbox_compat={checkbox_compatible_versions}, manual_compat_str='{manual_compatible_versions_str}'")
         
         # 获取设备信息并确定固件类型
         target_device_instance = next((d for d in all_system_devices if d.id == device_id), None)
         if not target_device_instance:
-            app.logger.warning(f"Firmware upload failed - device not found: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
+            app.logger.debug(f"Firmware upload failed - device not found: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
             flash('选择的设备不存在。')
-            return render_template('upload_firmware.html', devices=devices_for_form)
+            return render_template('upload_firmware.html', devices=devices_for_form,
+                                   selected_device_id=device_id, version=version, description=description,
+                                   manual_compatible_version=manual_compatible_versions_str)
             
         # 根据设备类型确定固件类型
         firmware_type = target_device_instance.device_type
         is_wifi = firmware_type == 'wifi'
         is_device = firmware_type == 'device'
         
-        app.logger.info(f"Firmware upload details: device_model={target_device_instance.model_number}, device_type={firmware_type}, version={version}, user_id={current_user.id}")
+        app.logger.debug(f"Firmware upload details: device_model={target_device_instance.model_number}, device_type={firmware_type}, version={version}, user_id={current_user.id}")
         
-        # 验证版本格式
+        # 验证主版本格式
         if not validate_version_format(version, firmware_type):
-            app.logger.warning(f"Firmware upload failed - invalid version format: version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
+            app.logger.debug(f"Firmware upload failed - invalid main version format: version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
             if firmware_type == 'wifi':
-                flash('WiFi固件版本格式必须为 x.x.x（如 1.0.0）')
+                flash(f'主固件版本 ({version}) 格式必须为 x.x.x（如 1.0.0）')
             else:
-                flash('设备固件版本必须为纯数字（如 100）')
-            return redirect(request.url)
-            
+                flash(f'主固件版本 ({version}) 必须为纯数字（如 100）')
+            return render_template('upload_firmware.html', devices=devices_for_form,
+                                   selected_device_id=device_id, version=version, description=description,
+                                   manual_compatible_version=manual_compatible_versions_str,
+                                   existing_compatible_versions=checkbox_compatible_versions)
+
+        # Validate manually entered compatible versions
+        all_compatible_versions = list(set(checkbox_compatible_versions + manual_compatible_versions_list)) # Combine and remove duplicates
+        
+        valid_compatible_versions = []
+        for cv in all_compatible_versions:
+            if not validate_version_format(cv, firmware_type): # Validate each compatible version against the firmware_type of the new firmware
+                app.logger.debug(f"Firmware upload failed - invalid compatible version format: version={cv}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
+                if firmware_type == 'wifi':
+                    flash(f'兼容版本 "{cv}" 格式无效。WiFi固件的兼容版本格式必须为 x.x.x（如 1.0.0）')
+                else:
+                    flash(f'兼容版本 "{cv}" 格式无效。设备固件的兼容版本必须为纯数字（如 100）')
+                return render_template('upload_firmware.html', devices=devices_for_form,
+                                       selected_device_id=device_id, version=version, description=description,
+                                       manual_compatible_version=manual_compatible_versions_str,
+                                       existing_compatible_versions=checkbox_compatible_versions) # Pass back selected ones
+            valid_compatible_versions.append(cv)
+        
+        final_compatible_versions = sorted(list(set(valid_compatible_versions))) # Sort and ensure uniqueness
+        app.logger.debug(f"Processed compatible versions: {final_compatible_versions}")
+
         # 检查是否已存在相同版本的固件
-        existing_firmwares = Firmware.get_all(device_id=device_id)
-        for firmware in existing_firmwares:
-            if firmware.version == version and firmware.is_wifi_firmware == is_wifi and firmware.is_device_firmware == is_device:
-                app.logger.warning(f"Firmware upload failed - version exists: device_id={device_id}, version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
+        existing_firmwares_for_device = Firmware.get_all(device_id=device_id) # Renamed to avoid conflict
+        for fw in existing_firmwares_for_device: # Renamed loop variable
+            if fw.version == version and fw.is_wifi_firmware == is_wifi and fw.is_device_firmware == is_device:
+                app.logger.debug(f"Firmware upload failed - version exists: device_id={device_id}, version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
                 flash('该版本固件已存在')
-                return redirect(url_for('upload_firmware'))
+                return render_template('upload_firmware.html', devices=devices_for_form,
+                                   selected_device_id=device_id, version=version, description=description,
+                                   manual_compatible_version=manual_compatible_versions_str,
+                                   existing_compatible_versions=checkbox_compatible_versions)
+
 
         # --- Make sure file is selected ---
         if 'firmware_file' not in request.files:
-            app.logger.warning(f"Firmware upload failed - no file selected: user_id={current_user.id}, IP={request.remote_addr}")
+            app.logger.debug(f"Firmware upload failed - no file selected: user_id={current_user.id}, IP={request.remote_addr}")
             flash('没有选择文件')
             return render_template('upload_firmware.html', devices=devices_for_form, 
-                                   selected_device_id=device_id, version=version, description=description)
+                                   selected_device_id=device_id, version=version, description=description,
+                                   manual_compatible_version=manual_compatible_versions_str,
+                                   existing_compatible_versions=checkbox_compatible_versions)
         
         file_from_request = request.files['firmware_file']
         if file_from_request.filename == '':
-            app.logger.warning(f"Firmware upload failed - empty filename: user_id={current_user.id}, IP={request.remote_addr}")
+            app.logger.debug(f"Firmware upload failed - empty filename: user_id={current_user.id}, IP={request.remote_addr}")
             flash('没有选择文件')
             return render_template('upload_firmware.html', devices=devices_for_form,
-                                   selected_device_id=device_id, version=version, description=description)
+                                   selected_device_id=device_id, version=version, description=description,
+                                   manual_compatible_version=manual_compatible_versions_str,
+                                   existing_compatible_versions=checkbox_compatible_versions)
         # --- End file selection check ---
         
         # 保存文件
         filename = secure_filename(f"{target_device_instance.model_number}_{firmware_type}_{version}_{uuid.uuid4()}.bin")
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
-        app.logger.info(f"Saving firmware file: original_filename={file_from_request.filename}, saved_filename={filename}, file_path={file_path}, user_id={current_user.id}")
+        app.logger.debug(f"Saving firmware file: original_filename={file_from_request.filename}, saved_filename={filename}, file_path={file_path}, user_id={current_user.id}")
         
         file_from_request.save(file_path)
         file_size = os.path.getsize(file_path)
         
         # 计算CRC校验和
-        app.logger.info(f"Calculating CRC for firmware: file_path={file_path}, file_size={file_size}")
+        app.logger.debug(f"Calculating CRC for firmware: file_path={file_path}, file_size={file_size}")
         crc = calculate_crc_modbus(file_path)
         
-        # 创建固件记录
+        # 创建固件记录，包含兼容版本
         new_firmware = Firmware(
             id=generate_id(),
             version=version,
@@ -824,20 +866,33 @@ def upload_firmware():
             is_wifi_firmware=is_wifi,
             is_device_firmware=is_device,
             status='active',
-            user_id=current_user.id
+            user_id=current_user.id,
+            compatible_versions=final_compatible_versions  # Pass the combined and validated list
         )
         
         new_firmware.save()
-        app.logger.info(f"Firmware uploaded successfully: firmware_id={new_firmware.id}, device_model={target_device_instance.model_number}, version={version}, file_size={file_size}, crc={crc}, user_id={current_user.id}, IP={request.remote_addr}")
+        app.logger.debug(f"Firmware uploaded successfully: firmware_id={new_firmware.id}, device_model={target_device_instance.model_number}, version={version}, file_size={file_size}, crc={crc}, compatible_versions={final_compatible_versions}, user_id={current_user.id}, IP={request.remote_addr}")
         
         flash('固件上传成功')
         return redirect(url_for('list_firmwares', device_id=device_id))
     
     # GET request
-    app.logger.info(f"Upload firmware page accessed: user_id={current_user.id}, available_devices={len(devices_for_form)}, IP={request.remote_addr}")
+    # Preserve entered values if form submission failed
+    selected_device_id = request.args.get('device_id', '')
+    version_val = request.args.get('version', '')
+    description_val = request.args.get('description', '')
+    manual_compat_val = request.args.get('manual_compatible_version', '')
+    # For GET, we don't have existing_compatible_versions from a failed POST,
+    # JavaScript will load them if a device is selected.
+
+    app.logger.debug(f"Upload firmware page accessed: user_id={current_user.id}, available_devices={len(devices_for_form)}, IP={request.remote_addr}")
     if not devices_for_form and not current_user.is_admin:
         flash("您当前没有被授权管理任何设备的固件，无法上传。")
-    return render_template('upload_firmware.html', devices=devices_for_form)
+    return render_template('upload_firmware.html', devices=devices_for_form,
+                           selected_device_id=selected_device_id,
+                           version=version_val,
+                           description=description_val,
+                           manual_compatible_version=manual_compat_val)
 
 # API: 固件查询
 @app.route('/firmware/check', methods=['POST'])
