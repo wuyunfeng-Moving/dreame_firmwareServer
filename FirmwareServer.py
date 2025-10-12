@@ -1166,22 +1166,27 @@ def list_firmware_versions(model_number):
     is_wifi = firmware_type == 'wifi'
     is_device = firmware_type == 'device'
     
-    # 查询所有活跃的固件版本
+    # 查询所有固件版本
     firmwares = Firmware.get_all(device_id=device.id, user_id=device.user_id)
     
     # 构建版本列表
     versions = []
+    base_host = request.host.split(':')[0]
     for firmware in firmwares:
-        # 获取兼容版本列表
-        compatible_versions = [c.compatible_version for c in firmware.compatible_versions]
+        # 过滤固件类型
+        if firmware.is_wifi_firmware != is_wifi or firmware.is_device_firmware != is_device:
+            continue
+        
+        download_url = f"http://{base_host}:3000/firmware/download/{firmware.id}"
         
         versions.append({
             'version': firmware.version,
-            'compatible_versions': compatible_versions,
-            'release_date': firmware.created_at,
+            'compatible_versions': firmware.compatible_versions,
+            'release_date': firmware.created_at.isoformat() if isinstance(firmware.created_at, datetime.datetime) else firmware.created_at,
             'size': firmware.file_size,
             'crc': firmware.crc_checksum,
-            'description': firmware.description
+            'description': firmware.description,
+            'url': download_url
         })
     
     return jsonify({
@@ -1708,4 +1713,4 @@ if __name__ == '__main__':
     
     # 启动HTTP服务器（主线程）
     app.logger.info('HTTP server starting on port 3001')
-    app.run(debug=True, host='0.0.0.0', port=3001, use_reloader=False)
+    app.run(debug=True, host='0.0.0.0', port=3000, use_reloader=False)
