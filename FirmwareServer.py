@@ -60,7 +60,7 @@ os.makedirs(os.path.join(app.config['DATA_FOLDER'], 'firmwares'), exist_ok=True)
 
 # 用户模型
 class User(UserMixin):
-    def __init__(self, id, username, password, company_name, email, phone, status='pending', 
+    def __init__(self, id, username, password, company_name, email, phone, status='pending',
                  created_at=None, updated_at=None, is_admin=False, visible_model_numbers=None):
         self.id = id
         self.username = username
@@ -69,13 +69,13 @@ class User(UserMixin):
         self.email = email
         self.phone = phone
         self.status = status
-        
+
         if isinstance(created_at, str):
             parsed_created_at = parse_iso_datetime(created_at)
             self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
         elif created_at is None:
             self.created_at = datetime.datetime.utcnow()
-        else: 
+        else:
             self.created_at = created_at
 
         if isinstance(updated_at, str):
@@ -83,12 +83,12 @@ class User(UserMixin):
             self.updated_at = parsed_updated_at if parsed_updated_at else datetime.datetime.utcnow()
         elif updated_at is None:
             self.updated_at = datetime.datetime.utcnow()
-        else: 
+        else:
             self.updated_at = updated_at
-            
+
         self.is_admin = is_admin
         self.visible_model_numbers = visible_model_numbers or []
-        
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -103,7 +103,7 @@ class User(UserMixin):
             'is_admin': self.is_admin,
             'visible_model_numbers': self.visible_model_numbers
         }
-    
+
     @classmethod
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
@@ -121,7 +121,7 @@ class User(UserMixin):
             updated_at_obj = updated_at_val
         else:
             updated_at_obj = None
-            
+
         return cls(
             id=data['id'],
             username=data['username'],
@@ -135,7 +135,7 @@ class User(UserMixin):
             is_admin=data['is_admin'],
             visible_model_numbers=data.get('visible_model_numbers', [])
         )
-    
+
     @classmethod
     def get(cls, user_id):
         user_file = os.path.join(app.config['DATA_FOLDER'], 'users', f"{user_id}.json")
@@ -143,7 +143,7 @@ class User(UserMixin):
             with open(user_file, 'r') as f:
                 return cls.from_dict(json.load(f))
         return None
-    
+
     @classmethod
     def get_by_username(cls, username):
         users_dir = os.path.join(app.config['DATA_FOLDER'], 'users')
@@ -154,7 +154,7 @@ class User(UserMixin):
                     if data['username'] == username:
                         return cls.from_dict(data)
         return None
-    
+
     @classmethod
     def get_all(cls):
         users = []
@@ -164,13 +164,13 @@ class User(UserMixin):
                 with open(os.path.join(users_dir, filename), 'r') as f:
                     users.append(cls.from_dict(json.load(f)))
         return users
-    
+
     def save(self):
         self.updated_at = datetime.datetime.utcnow()
         user_file = os.path.join(app.config['DATA_FOLDER'], 'users', f"{self.id}.json")
         with open(user_file, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
-    
+
     def get_devices(self):
         devices = []
         devices_dir = os.path.join(app.config['DATA_FOLDER'], 'devices')
@@ -181,7 +181,7 @@ class User(UserMixin):
                     if data['user_id'] == self.id:
                         devices.append(Device.from_dict(data))
         return devices
-    
+
     def get_firmwares(self):
         firmwares = []
         firmwares_dir = os.path.join(app.config['DATA_FOLDER'], 'firmwares')
@@ -195,7 +195,7 @@ class User(UserMixin):
 
 # 设备模型
 class Device:
-    def __init__(self, id, model_number, model_name, description, user_id, 
+    def __init__(self, id, model_number, model_name, description, user_id,
                  created_at=None, updated_at=None, device_type='device'):
         self.id = id
         self.model_number = model_number
@@ -203,7 +203,7 @@ class Device:
         self.description = description
         self.user_id = user_id
         self.device_type = device_type
-        
+
         if isinstance(created_at, str):
             parsed_created_at = parse_iso_datetime(created_at)
             self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
@@ -219,7 +219,7 @@ class Device:
             self.updated_at = datetime.datetime.utcnow()
         else:
             self.updated_at = updated_at
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -231,7 +231,7 @@ class Device:
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime.datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime.datetime) else self.updated_at
         }
-    
+
     @classmethod
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
@@ -245,7 +245,7 @@ class Device:
             updated_at_obj = parse_iso_datetime(updated_at_val)
         elif isinstance(updated_at_val, datetime.datetime): updated_at_obj = updated_at_val
         else: updated_at_obj = None
-            
+
         return cls(
             id=data['id'],
             model_number=data['model_number'],
@@ -256,7 +256,7 @@ class Device:
             created_at=created_at_obj,
             updated_at=updated_at_obj
         )
-    
+
     @classmethod
     def get(cls, device_id):
         device_file = os.path.join(app.config['DATA_FOLDER'], 'devices', f"{device_id}.json")
@@ -264,7 +264,7 @@ class Device:
             with open(device_file, 'r') as f:
                 return cls.from_dict(json.load(f))
         return None
-    
+
     @classmethod
     def get_by_model_number(cls, model_number, user_id=None):
         devices_dir = os.path.join(app.config['DATA_FOLDER'], 'devices')
@@ -276,7 +276,7 @@ class Device:
                         if user_id is None or data['user_id'] == user_id:
                             return cls.from_dict(data)
         return None
-    
+
     @classmethod
     def get_all(cls, user_id=None):
         devices = []
@@ -288,13 +288,13 @@ class Device:
                     if user_id is None or data['user_id'] == user_id:
                         devices.append(cls.from_dict(data))
         return devices
-    
+
     def save(self):
         self.updated_at = datetime.datetime.utcnow()
         device_file = os.path.join(app.config['DATA_FOLDER'], 'devices', f"{self.id}.json")
         with open(device_file, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
-    
+
     def get_firmwares(self):
         firmwares = []
         firmwares_dir = os.path.join(app.config['DATA_FOLDER'], 'firmwares')
@@ -308,8 +308,8 @@ class Device:
 
 # 固件模型
 class Firmware:
-    def __init__(self, id, version, device_id, file_path, file_size, crc_checksum, 
-                 description, is_wifi_firmware, is_device_firmware, status, user_id, 
+    def __init__(self, id, version, device_id, file_path, file_size, crc_checksum,
+                 description, is_wifi_firmware, is_device_firmware, status, user_id,
                  created_at=None, compatible_versions=None):
         self.id = id
         self.version = version
@@ -322,7 +322,7 @@ class Firmware:
         self.is_device_firmware = is_device_firmware
         self.status = status
         self.user_id = user_id
-        
+
         if isinstance(created_at, str):
             parsed_created_at = parse_iso_datetime(created_at)
             self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
@@ -330,9 +330,9 @@ class Firmware:
             self.created_at = datetime.datetime.utcnow()
         else:
             self.created_at = created_at
-            
+
         self.compatible_versions = compatible_versions or []
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -349,7 +349,7 @@ class Firmware:
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime.datetime) else self.created_at,
             'compatible_versions': self.compatible_versions
         }
-    
+
     @classmethod
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
@@ -357,7 +357,7 @@ class Firmware:
             created_at_obj = parse_iso_datetime(created_at_val)
         elif isinstance(created_at_val, datetime.datetime): created_at_obj = created_at_val
         else: created_at_obj = None
-            
+
         return cls(
             id=data['id'],
             version=data['version'],
@@ -373,7 +373,7 @@ class Firmware:
             created_at=created_at_obj,
             compatible_versions=data.get('compatible_versions', [])
         )
-    
+
     @classmethod
     def get(cls, firmware_id):
         firmware_file = os.path.join(app.config['DATA_FOLDER'], 'firmwares', f"{firmware_id}.json")
@@ -381,7 +381,7 @@ class Firmware:
             with open(firmware_file, 'r') as f:
                 return cls.from_dict(json.load(f))
         return None
-    
+
     @classmethod
     def get_all(cls, device_id=None, user_id=None):
         firmwares = []
@@ -394,7 +394,7 @@ class Firmware:
                        (user_id is None or data['user_id'] == user_id):
                         firmwares.append(cls.from_dict(data))
         return firmwares
-    
+
     @classmethod
     def find_compatible(cls, device_id, current_version, is_wifi, is_device, getlatest=False):
         firmwares = []
@@ -408,14 +408,14 @@ class Firmware:
                        data['is_device_firmware'] == is_device and \
                        data['status'] == 'active' and \
                        current_version in data.get('compatible_versions', []) or getlatest:
-                        
+
                         firmwares.append(cls.from_dict(data))
-        
+
         # 按创建时间排序，返回最新的
         if firmwares:
             return sorted(firmwares, key=lambda x: x.created_at, reverse=True)[0]
         return None
-    
+
     def save(self):
         firmware_file = os.path.join(app.config['DATA_FOLDER'], 'firmwares', f"{self.id}.json")
         with open(firmware_file, 'w') as f:
@@ -504,6 +504,10 @@ def validate_version_format(version, device_type):
         # WiFi固件版本格式: x.x.x (如 1.0.0)
         pattern = r'^\d+\.\d+\.\d+$'
         return bool(re.match(pattern, version))
+    if device_type == 'bundle':
+        # FWPK/Bundle 版本允许使用常见发布版本格式
+        pattern = r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+        return bool(re.match(pattern, version))
     else:
         # 设备固件版本格式: 纯数字 (如 100)
         return version.isdigit()
@@ -566,6 +570,231 @@ def get_device(device_id):
 def get_user(user_id):
     return User.get(user_id)
 
+
+def _is_user_authorized_for_device(user, device):
+    if user.is_admin:
+        return True
+    return device.model_number in user.visible_model_numbers
+
+
+def _visible_devices_for_user(user):
+    all_devices = Device.get_all()
+    if user.is_admin:
+        return all_devices
+    visible_models = set(user.visible_model_numbers or [])
+    return [device for device in all_devices if device.model_number in visible_models]
+
+
+def _serialize_device(device):
+    return {
+        'id': device.id,
+        'model_number': device.model_number,
+        'model_name': device.model_name,
+        'description': device.description,
+        'device_type': device.device_type,
+        'created_at': device.created_at.isoformat() if isinstance(device.created_at, datetime.datetime) else device.created_at,
+        'updated_at': device.updated_at.isoformat() if isinstance(device.updated_at, datetime.datetime) else device.updated_at,
+    }
+
+
+def _serialize_firmware(firmware, device=None):
+    target_device = device or Device.get(firmware.device_id)
+    return {
+        'id': firmware.id,
+        'device_id': firmware.device_id,
+        'model_number': target_device.model_number if target_device else '',
+        'model_name': target_device.model_name if target_device else '',
+        'device_type': target_device.device_type if target_device else '',
+        'version': firmware.version,
+        'description': firmware.description,
+        'status': firmware.status,
+        'file_size': firmware.file_size,
+        'crc_checksum': firmware.crc_checksum,
+        'compatible_versions': firmware.compatible_versions,
+        'is_wifi_firmware': firmware.is_wifi_firmware,
+        'is_device_firmware': firmware.is_device_firmware,
+        'created_at': firmware.created_at.isoformat() if isinstance(firmware.created_at, datetime.datetime) else firmware.created_at,
+        'download_url': url_for('download_firmware', firmware_id=firmware.id, _external=True),
+    }
+
+
+def _parse_compatible_versions(form_data):
+    checkbox_compatible_versions = form_data.getlist('compatible_versions')
+    manual_compatible_versions_str = form_data.get('manual_compatible_version', '').strip()
+    manual_compatible_versions_list = []
+    if manual_compatible_versions_str:
+        manual_compatible_versions_list = [value.strip() for value in manual_compatible_versions_str.split(';') if value.strip()]
+    return checkbox_compatible_versions, manual_compatible_versions_str, manual_compatible_versions_list
+
+
+def _validate_compatible_versions(versions, firmware_type):
+    valid_versions = []
+    for version in versions:
+        if not validate_version_format(version, firmware_type):
+            return None, version
+        valid_versions.append(version)
+    return sorted(list(set(valid_versions))), None
+
+
+def _create_firmware_record_from_request(user, device_id, version, description, file_from_request, compatible_versions):
+    all_system_devices = Device.get_all()
+    target_device_instance = next((device for device in all_system_devices if device.id == device_id), None)
+    if not target_device_instance:
+        return None, ('device_not_found', '选择的设备不存在。', 404)
+    if not _is_user_authorized_for_device(user, target_device_instance):
+        return None, ('forbidden', '您没有权限管理该型号。', 403)
+
+    firmware_type = target_device_instance.device_type
+    is_wifi = firmware_type == 'wifi'
+    is_device = firmware_type == 'device'
+
+    if not validate_version_format(version, firmware_type):
+        if firmware_type == 'wifi':
+            message = f'主固件版本 ({version}) 格式必须为 x.x.x（如 1.0.0）'
+        elif firmware_type == 'bundle':
+            message = f'整包版本 ({version}) 仅允许字母、数字、点、下划线和短横线'
+        else:
+            message = f'主固件版本 ({version}) 必须为纯数字（如 100）'
+        return None, ('invalid_version', message, 400)
+
+    final_compatible_versions, invalid_version = _validate_compatible_versions(compatible_versions, firmware_type)
+    if invalid_version is not None:
+        if firmware_type == 'wifi':
+            message = f'兼容版本 "{invalid_version}" 格式无效。WiFi固件的兼容版本格式必须为 x.x.x（如 1.0.0）'
+        elif firmware_type == 'bundle':
+            message = f'兼容版本 "{invalid_version}" 格式无效。整包版本仅允许字母、数字、点、下划线和短横线'
+        else:
+            message = f'兼容版本 "{invalid_version}" 格式无效。设备固件的兼容版本必须为纯数字（如 100）'
+        return None, ('invalid_compatible_version', message, 400)
+
+    existing_firmwares_for_device = Firmware.get_all(device_id=device_id)
+    for firmware in existing_firmwares_for_device:
+        if firmware.version == version and firmware.is_wifi_firmware == is_wifi and firmware.is_device_firmware == is_device:
+            return None, ('duplicate_version', '该版本固件已存在', 409)
+
+    if file_from_request is None or file_from_request.filename == '':
+        return None, ('missing_file', '没有选择文件', 400)
+
+    filename = secure_filename(f"{target_device_instance.model_number}_{firmware_type}_{version}_{uuid.uuid4()}.bin")
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file_from_request.save(file_path)
+    file_size = os.path.getsize(file_path)
+    crc = calculate_crc_modbus(file_path)
+
+    new_firmware = Firmware(
+        id=generate_id(),
+        version=version,
+        device_id=device_id,
+        file_path=file_path,
+        file_size=file_size,
+        crc_checksum=crc,
+        description=description,
+        is_wifi_firmware=is_wifi,
+        is_device_firmware=is_device,
+        status='active',
+        user_id=user.id,
+        compatible_versions=final_compatible_versions,
+    )
+    new_firmware.save()
+    return (new_firmware, target_device_instance), None
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    data = request.get_json(silent=True) if request.is_json else request.form
+    username = data.get('username') if data else None
+    password = data.get('password') if data else None
+
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Missing username or password'}), 400
+
+    user = User.get_by_username(username)
+    if not user or not check_password_hash(user.password, password):
+        return jsonify({'status': 'error', 'message': '用户名或密码错误'}), 401
+
+    if user.status != 'approved' and not user.is_admin:
+        return jsonify({'status': 'error', 'message': '您的账户尚未获得批准'}), 403
+
+    login_user(user)
+    return jsonify(
+        {
+            'status': 'success',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'is_admin': user.is_admin,
+                'visible_model_numbers': user.visible_model_numbers,
+            },
+        }
+    )
+
+
+@app.route('/api/devices', methods=['GET'])
+@login_required
+def api_list_devices():
+    devices = sorted(_visible_devices_for_user(current_user), key=lambda device: (device.model_number, device.model_name))
+    return jsonify({'status': 'success', 'devices': [_serialize_device(device) for device in devices]})
+
+
+@app.route('/api/firmwares', methods=['GET'])
+@login_required
+def api_list_firmwares():
+    device_id = request.args.get('device_id', '').strip()
+    model_number = request.args.get('model_number', '').strip()
+
+    target_device = None
+    if device_id:
+        target_device = Device.get(device_id)
+    elif model_number:
+        target_device = Device.get_by_model_number(model_number)
+
+    devices = _visible_devices_for_user(current_user)
+    devices_by_id = {device.id: device for device in devices}
+
+    if target_device is not None and target_device.id not in devices_by_id:
+        return jsonify({'status': 'error', 'message': '您无权查看此设备的固件。'}), 403
+
+    if target_device is not None:
+        firmwares = Firmware.get_all(device_id=target_device.id)
+        serialized = [_serialize_firmware(firmware, target_device) for firmware in sorted(firmwares, key=lambda item: item.created_at, reverse=True)]
+        return jsonify({'status': 'success', 'device': _serialize_device(target_device), 'firmwares': serialized})
+
+    firmwares = []
+    for device in devices:
+        for firmware in Firmware.get_all(device_id=device.id):
+            firmwares.append(_serialize_firmware(firmware, device))
+    firmwares.sort(key=lambda item: (item.get('model_number', ''), item.get('created_at', '')), reverse=True)
+    return jsonify({'status': 'success', 'firmwares': firmwares})
+
+
+@app.route('/api/firmwares/upload', methods=['POST'])
+@login_required
+def api_upload_firmware():
+    device_id = request.form.get('device_id', '').strip()
+    version = request.form.get('version', '').strip()
+    description = request.form.get('description', '').strip()
+    checkbox_versions, manual_versions_str, manual_versions = _parse_compatible_versions(request.form)
+    combined_versions = list(set(checkbox_versions + manual_versions))
+    file_from_request = request.files.get('firmware_file')
+
+    if not device_id or not version:
+        return jsonify({'status': 'error', 'message': 'Missing device_id or version'}), 400
+
+    created, error = _create_firmware_record_from_request(
+        current_user,
+        device_id,
+        version,
+        description,
+        file_from_request,
+        combined_versions,
+    )
+    if error is not None:
+        error_code, message, status_code = error
+        return jsonify({'status': 'error', 'error_code': error_code, 'message': message, 'manual_compatible_version': manual_versions_str}), status_code
+
+    firmware, device = created
+    return jsonify({'status': 'success', 'firmware': _serialize_firmware(firmware, device), 'device': _serialize_device(device)}), 201
+
 # 路由: 首页
 @app.route('/')
 def index():
@@ -580,16 +809,16 @@ def register():
         company_name = request.form.get('company_name')
         email = request.form.get('email')
         phone = request.form.get('phone')
-        
+
         # 记录注册尝试
         app.logger.debug(f"Registration attempt: username={username}, company={company_name}, email={email}, phone={phone}, IP={request.remote_addr}")
-        
+
         user_exists = User.get_by_username(username)
         if user_exists:
             app.logger.debug(f"Registration failed - username already exists: {username}, IP={request.remote_addr}")
             flash('用户名已存在')
             return redirect(url_for('register'))
-        
+
         hashed_password = generate_password_hash(password)
         new_user = User(
             id=generate_id(),
@@ -599,13 +828,13 @@ def register():
             email=email,
             phone=phone
         )
-        
+
         new_user.save()
-        
+
         app.logger.debug(f"User registration successful: ID={new_user.id}, username={username}, company={company_name}, IP={request.remote_addr}")
         flash('注册成功，请等待管理员审核')
         return redirect(url_for('login'))
-    
+
     app.logger.debug(f"Registration page accessed from IP={request.remote_addr}")
     return render_template('register.html')
 
@@ -615,30 +844,30 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+
         app.logger.debug(f"Login attempt: username={username}, IP={request.remote_addr}, User-Agent={request.headers.get('User-Agent', 'Unknown')}")
-        
+
         user = User.get_by_username(username)
-        
+
         if not user:
             app.logger.debug(f"Login failed - user not found: username={username}, IP={request.remote_addr}")
             flash('用户名或密码错误')
             return redirect(url_for('login'))
-            
+
         if not check_password_hash(user.password, password):
             app.logger.debug(f"Login failed - incorrect password: username={username}, IP={request.remote_addr}")
             flash('用户名或密码错误')
             return redirect(url_for('login'))
-        
+
         if user.status != 'approved' and not user.is_admin:
             app.logger.debug(f"Login failed - user not approved: username={username}, status={user.status}, IP={request.remote_addr}")
             flash('您的账户尚未获得批准')
             return redirect(url_for('login'))
-        
+
         login_user(user)
         app.logger.debug(f"Login successful: user_id={user.id}, username={username}, is_admin={user.is_admin}, IP={request.remote_addr}")
         return redirect(url_for('dashboard'))
-    
+
     app.logger.debug(f"Login page accessed from IP={request.remote_addr}")
     return render_template('login.html')
 
@@ -655,16 +884,16 @@ def logout():
 @login_required
 def dashboard():
     devices_to_display = []
-    all_system_devices = Device.get_all() 
+    all_system_devices = Device.get_all()
     if current_user.is_admin:
         devices_to_display = all_system_devices
         app.logger.info(f"Dashboard accessed by admin: user_id={current_user.id}, total_devices={len(devices_to_display)}, IP={request.remote_addr}")
     else:
         user_visible_models = current_user.visible_model_numbers
-        if user_visible_models: 
+        if user_visible_models:
             devices_to_display = [d for d in all_system_devices if d.model_number in user_visible_models]
         app.logger.info(f"Dashboard accessed by user: user_id={current_user.id}, visible_models={user_visible_models}, visible_devices={len(devices_to_display)}, IP={request.remote_addr}")
-    
+
     return render_template('dashboard.html', devices=devices_to_display)
 
 # 路由: 设备管理
@@ -681,7 +910,7 @@ def list_devices():
         if user_visible_models:
             devices_to_display = [d for d in all_system_devices if d.model_number in user_visible_models]
         app.logger.info(f"Device list accessed by user: user_id={current_user.id}, visible_models={user_visible_models}, visible_devices={len(devices_to_display)}, IP={request.remote_addr}")
-            
+
     return render_template('devices.html', devices=devices_to_display)
 
 # 路由: 添加设备
@@ -698,15 +927,15 @@ def add_device():
         model_name = request.form.get('model_name')
         description = request.form.get('description')
         device_type = request.form.get('device_type', 'device')
-        
+
         app.logger.info(f"Device add attempt: admin_id={current_user.id}, model_number={model_number}, model_name={model_name}, device_type={device_type}, IP={request.remote_addr}")
-        
+
         device_exists = Device.get_by_model_number(model_number)
         if device_exists:
             app.logger.warning(f"Device add failed - model exists: model_number={model_number}, admin_id={current_user.id}, IP={request.remote_addr}")
             flash('该型号已存在')
             return redirect(url_for('add_device'))
-        
+
         new_device = Device(
             id=generate_id(),
             model_number=model_number,
@@ -715,13 +944,13 @@ def add_device():
             user_id=current_user.id,
             device_type=device_type
         )
-        
+
         new_device.save()
-        
+
         app.logger.info(f"Device added successfully: device_id={new_device.id}, model_number={model_number}, model_name={model_name}, device_type={device_type}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('设备添加成功')
         return redirect(url_for('list_devices'))
-    
+
     app.logger.info(f"Add device page accessed: admin_id={current_user.id}, IP={request.remote_addr}")
     return render_template('add_device.html')
 
@@ -732,8 +961,8 @@ def list_firmwares():
     device_id_param = request.args.get('device_id')
     target_device_instance = None
     firmwares_to_display = []
-    
-    all_system_devices = Device.get_all() 
+
+    all_system_devices = Device.get_all()
 
     if device_id_param:
         target_device_instance = next((d for d in all_system_devices if d.id == device_id_param), None)
@@ -752,7 +981,7 @@ def list_firmwares():
             app.logger.warning(f"Firmware list access denied: device_id={device_id_param}, model_number={target_device_instance.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
             flash('您无权查看此设备的固件。')
             return redirect(url_for('list_devices'))
-        
+
         firmwares_to_display = Firmware.get_all(device_id=device_id_param)
         app.logger.info(f"Device firmware list accessed: device_id={device_id_param}, model_number={target_device_instance.model_number}, firmware_count={len(firmwares_to_display)}, user_id={current_user.id}, IP={request.remote_addr}")
         return render_template('firmwares.html', firmwares=firmwares_to_display, device=target_device_instance)
@@ -760,11 +989,11 @@ def list_firmwares():
         # Listing all firmwares
         if current_user.is_admin:
             authorized_devices_instances = all_system_devices
-            firmwares_to_display = Firmware.get_all() 
+            firmwares_to_display = Firmware.get_all()
             devices_map = {dev.id: dev for dev in authorized_devices_instances}
             app.logger.info(f"All firmware list accessed by admin: user_id={current_user.id}, total_firmwares={len(firmwares_to_display)}, IP={request.remote_addr}")
             return render_template('firmwares.html', firmwares=firmwares_to_display, all_devices_map=devices_map, view_all=True)
-        else: 
+        else:
             user_visible_models = current_user.visible_model_numbers
             if not user_visible_models:
                 app.logger.info(f"Firmware list access - no visible models: user_id={current_user.id}, IP={request.remote_addr}")
@@ -772,7 +1001,7 @@ def list_firmwares():
                 return render_template('firmwares.html', firmwares=[], device=None, view_all=True)
 
             authorized_devices_instances = [d for d in all_system_devices if d.model_number in user_visible_models]
-            
+
             if not authorized_devices_instances:
                 app.logger.info(f"Firmware list access - no authorized devices: user_id={current_user.id}, visible_models={user_visible_models}, IP={request.remote_addr}")
                 flash('没有找到您有权限访问的设备型号的固件。')
@@ -782,7 +1011,7 @@ def list_firmwares():
             for dev_id in authorized_device_ids:
                 firmwares_for_device = Firmware.get_all(device_id=dev_id)
                 firmwares_to_display.extend(firmwares_for_device)
-            
+
             devices_map = {dev.id: dev for dev in authorized_devices_instances}
             app.logger.info(f"User firmware list accessed: user_id={current_user.id}, visible_models={user_visible_models}, authorized_devices={len(authorized_devices_instances)}, total_firmwares={len(firmwares_to_display)}, IP={request.remote_addr}")
             return render_template('firmwares.html', firmwares=firmwares_to_display, visible_devices_map=devices_map, view_all=True)
@@ -804,10 +1033,10 @@ def upload_firmware():
         device_id = request.form.get('device_id')
         version = request.form.get('version')
         description = request.form.get('description')
-        
+
         # Get compatible versions from checkboxes
         checkbox_compatible_versions = request.form.getlist('compatible_versions')
-        
+
         # Get compatible versions from manual input
         manual_compatible_versions_str = request.form.get('manual_compatible_version', '').strip()
         manual_compatible_versions_list = []
@@ -815,7 +1044,7 @@ def upload_firmware():
             manual_compatible_versions_list = [v.strip() for v in manual_compatible_versions_str.split(';') if v.strip()]
 
         app.logger.debug(f"Firmware upload attempt: user_id={current_user.id}, device_id={device_id}, version={version}, checkbox_compat={checkbox_compatible_versions}, manual_compat_str='{manual_compatible_versions_str}'")
-        
+
         # 获取设备信息并确定固件类型
         target_device_instance = next((d for d in all_system_devices if d.id == device_id), None)
         if not target_device_instance:
@@ -824,14 +1053,14 @@ def upload_firmware():
             return render_template('upload_firmware.html', devices=devices_for_form,
                                    selected_device_id=device_id, version=version, description=description,
                                    manual_compatible_version=manual_compatible_versions_str)
-            
+
         # 根据设备类型确定固件类型
         firmware_type = target_device_instance.device_type
         is_wifi = firmware_type == 'wifi'
         is_device = firmware_type == 'device'
-        
+
         app.logger.debug(f"Firmware upload details: device_model={target_device_instance.model_number}, device_type={firmware_type}, version={version}, user_id={current_user.id}")
-        
+
         # 验证主版本格式
         if not validate_version_format(version, firmware_type):
             app.logger.debug(f"Firmware upload failed - invalid main version format: version={version}, firmware_type={firmware_type}, user_id={current_user.id}, IP={request.remote_addr}")
@@ -846,7 +1075,7 @@ def upload_firmware():
 
         # Validate manually entered compatible versions
         all_compatible_versions = list(set(checkbox_compatible_versions + manual_compatible_versions_list)) # Combine and remove duplicates
-        
+
         valid_compatible_versions = []
         for cv in all_compatible_versions:
             if not validate_version_format(cv, firmware_type): # Validate each compatible version against the firmware_type of the new firmware
@@ -860,7 +1089,7 @@ def upload_firmware():
                                        manual_compatible_version=manual_compatible_versions_str,
                                        existing_compatible_versions=checkbox_compatible_versions) # Pass back selected ones
             valid_compatible_versions.append(cv)
-        
+
         final_compatible_versions = sorted(list(set(valid_compatible_versions))) # Sort and ensure uniqueness
         app.logger.debug(f"Processed compatible versions: {final_compatible_versions}")
 
@@ -880,11 +1109,11 @@ def upload_firmware():
         if 'firmware_file' not in request.files:
             app.logger.debug(f"Firmware upload failed - no file selected: user_id={current_user.id}, IP={request.remote_addr}")
             flash('没有选择文件')
-            return render_template('upload_firmware.html', devices=devices_for_form, 
+            return render_template('upload_firmware.html', devices=devices_for_form,
                                    selected_device_id=device_id, version=version, description=description,
                                    manual_compatible_version=manual_compatible_versions_str,
                                    existing_compatible_versions=checkbox_compatible_versions)
-        
+
         file_from_request = request.files['firmware_file']
         if file_from_request.filename == '':
             app.logger.debug(f"Firmware upload failed - empty filename: user_id={current_user.id}, IP={request.remote_addr}")
@@ -894,20 +1123,20 @@ def upload_firmware():
                                    manual_compatible_version=manual_compatible_versions_str,
                                    existing_compatible_versions=checkbox_compatible_versions)
         # --- End file selection check ---
-        
+
         # 保存文件
         filename = secure_filename(f"{target_device_instance.model_number}_{firmware_type}_{version}_{uuid.uuid4()}.bin")
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
+
         app.logger.debug(f"Saving firmware file: original_filename={file_from_request.filename}, saved_filename={filename}, file_path={file_path}, user_id={current_user.id}")
-        
+
         file_from_request.save(file_path)
         file_size = os.path.getsize(file_path)
-        
+
         # 计算CRC校验和
         app.logger.debug(f"Calculating CRC for firmware: file_path={file_path}, file_size={file_size}")
         crc = calculate_crc_modbus(file_path)
-        
+
         # 创建固件记录，包含兼容版本
         new_firmware = Firmware(
             id=generate_id(),
@@ -923,13 +1152,13 @@ def upload_firmware():
             user_id=current_user.id,
             compatible_versions=final_compatible_versions  # Pass the combined and validated list
         )
-        
+
         new_firmware.save()
         app.logger.debug(f"Firmware uploaded successfully: firmware_id={new_firmware.id}, device_model={target_device_instance.model_number}, version={version}, file_size={file_size}, crc={crc}, compatible_versions={final_compatible_versions}, user_id={current_user.id}, IP={request.remote_addr}")
-        
+
         flash('固件上传成功')
         return redirect(url_for('list_firmwares', device_id=device_id))
-    
+
     # GET request
     # Preserve entered values if form submission failed
     selected_device_id = request.args.get('device_id', '')
@@ -953,41 +1182,41 @@ def upload_firmware():
 def check_firmware():
     client_ip = request.remote_addr
     user_agent = request.headers.get('User-Agent', 'Unknown')
-    
+
     app.logger.info(f"Firmware check request received: IP={client_ip}, User-Agent={user_agent}")
-    
+
     data = request.json
     if not data:
         app.logger.warning(f"Firmware check failed - no data provided: IP={client_ip}")
         return jsonify({'error': 'No data provided'}), 400
 
     app.logger.info(f"Firmware check data: {data}, IP={client_ip}")
-    
+
     model_number = data.get('device_model')
     device_version = data.get('device_version')
     wifi_version = data.get('wifi_version')
-    
+
     if not model_number or not device_version or not wifi_version:
         app.logger.warning(f"Firmware check failed - missing fields: model={model_number}, device_ver={device_version}, wifi_ver={wifi_version}, IP={client_ip}")
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # 验证版本格式
     if not validate_version_format(device_version, 'device'):
         app.logger.warning(f"Firmware check failed - invalid device version format: device_version={device_version}, IP={client_ip}")
         return jsonify({'error': 'Invalid device version format, must be numeric'}), 400
-    
+
     if not validate_version_format(wifi_version, 'wifi'):
         app.logger.warning(f"Firmware check failed - invalid WiFi version format: wifi_version={wifi_version}, IP={client_ip}")
         return jsonify({'error': 'Invalid WiFi version format, must be x.x.x'}), 400
-    
+
     # 查找设备
     device = Device.get_by_model_number(model_number)
     if not device:
         app.logger.warning(f"Firmware check failed - device not found: model_number={model_number}, IP={client_ip}")
         return jsonify({'error': 'Device not found'}), 404
-    
+
     app.logger.info(f"Device found for firmware check: device_id={device.id}, model_number={model_number}, device_name={device.model_name}, IP={client_ip}")
-    
+
     # 构建响应
     response = {
         "status": "success",
@@ -995,7 +1224,7 @@ def check_firmware():
         "device": None,
         "wifi": None
     }
-    
+
     # 检查设备固件更新
     device_firmware = Firmware.find_compatible(
         device_id=device.id,
@@ -1003,7 +1232,7 @@ def check_firmware():
         is_wifi=False,
         is_device=True
     )
-    
+
     if device_firmware:
         base_url = request.host.split(':')[0]
         download_url = f"http://{base_url}:3000/firmware/download/{device_firmware.id}"
@@ -1026,20 +1255,20 @@ def check_firmware():
             "notes": None
         }
         app.logger.info(f"No device firmware update available: model={model_number}, current={device_version}, IP={client_ip}")
-    
+
     # 检查WiFi固件更新
-    wifi_device = Device.get_by_model_number('wifi')    
+    wifi_device = Device.get_by_model_number('wifi')
     if not wifi_device:
         app.logger.error(f"WiFi device not found in system: IP={client_ip}")
         return jsonify({'error': 'WiFi device not found'}), 404
-    
+
     wifi_firmware = Firmware.find_compatible(
         device_id=wifi_device.id,
         current_version=wifi_version,
         is_wifi=True,
         is_device=False
     )
-    
+
     if wifi_firmware:
         base_url = request.host.split(':')[0]
         download_url = f"http://{base_url}:3000/firmware/download/{wifi_firmware.id}"
@@ -1062,7 +1291,7 @@ def check_firmware():
             "notes": None
         }
         app.logger.info(f"No WiFi firmware update available: current={wifi_version}, IP={client_ip}")
-    
+
     app.logger.info(f"Firmware check completed: model={model_number}, device_upgradable={response['device']['upgradable']}, wifi_upgradable={response['wifi']['upgradable']}, IP={client_ip}")
     return jsonify(response)
 
@@ -1071,31 +1300,31 @@ def check_firmware():
 def download_firmware(firmware_id):
     client_ip = request.remote_addr
     user_agent = request.headers.get('User-Agent', 'Unknown')
-    
+
     app.logger.info(f"Firmware download request: firmware_id={firmware_id}, IP={client_ip}, User-Agent={user_agent}")
-    
+
     firmware = Firmware.get(firmware_id)
     if not firmware:
         app.logger.warning(f"Firmware download failed - not found: firmware_id={firmware_id}, IP={client_ip}")
         return jsonify({'error': 'Firmware not found'}), 404
-    
+
     # 获取设备信息用于日志
     device = Device.get(firmware.device_id)
     device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
-    
+
     app.logger.info(f"Firmware download started: firmware_id={firmware_id}, version={firmware.version}, device={device_info}, file_size={firmware.file_size} bytes, IP={client_ip}")
-    
+
     # 确保文件存在并获取实际文件大小
     if not os.path.exists(firmware.file_path):
         app.logger.error(f"Firmware file not found: firmware_id={firmware_id}, file_path={firmware.file_path}, IP={client_ip}")
         return jsonify({'error': 'Firmware file not found'}), 404
-    
+
     actual_file_size = os.path.getsize(firmware.file_path)
     if actual_file_size != firmware.file_size:
         app.logger.warning(f"File size mismatch: firmware_id={firmware_id}, stored_size={firmware.file_size}, actual_size={actual_file_size}, IP={client_ip}")
         firmware.file_size = actual_file_size
         firmware.save()
-    
+
     app.logger.info(f"Firmware download confirmed: firmware_id={firmware_id}, file_size={actual_file_size} bytes, file_path={firmware.file_path}, IP={client_ip}")
 
     def generate_file(start_offset, end_offset):
@@ -1181,7 +1410,7 @@ def download_firmware(firmware_id):
         **base_headers,
         'Content-Length': str(actual_file_size),
     }
-    
+
     return app.response_class(
         generate_file(0, actual_file_size - 1),
         headers=headers,
@@ -1194,31 +1423,31 @@ def download_firmware_chunk(firmware_id):
     firmware = Firmware.get(firmware_id)
     if not firmware:
         return jsonify({'error': 'Firmware not found'}), 404
-    
+
     # 获取分块参数
     chunk_size = request.args.get('chunk_size', type=int, default=1024)
     chunk_index = request.args.get('chunk_index', type=int, default=0)
     client_progress = request.args.get('client_progress', type=float, default=0)
-    
+
     # 验证参数
     if chunk_size <= 0 or chunk_index < 0:
         return jsonify({'error': 'Invalid chunk parameters'}), 400
-    
+
     # 打开文件并读取指定块
     try:
         with open(firmware.file_path, 'rb') as f:
             f.seek(chunk_index * chunk_size)
             chunk_data = f.read(chunk_size)
-            
+
             if not chunk_data:  # 如果没有数据，说明已经超出文件范围
                 return jsonify({'error': 'Chunk index out of range'}), 400
-            
+
             # 计算总块数
             total_chunks = (firmware.file_size + chunk_size - 1) // chunk_size
-            
+
             # 使用客户端报告的进度，如果有的话
             progress_percent = client_progress if client_progress > 0 else min(100, round((chunk_index + 1) / total_chunks * 100, 2))
-            
+
             # 打印下载进度日志
             if chunk_index == 0:
                 # 首次请求，打印开始下载信息
@@ -1226,12 +1455,12 @@ def download_firmware_chunk(firmware_id):
                 device_info = f"{device.model_number} ({device.model_name})" if device else "Unknown device"
                 app.logger.info(f"Chunked download started: firmware_id={firmware_id}, version={firmware.version}, device={device_info}")
                 app.logger.info(f"Total file size: {firmware.file_size} bytes, Total chunks: {total_chunks}")
-            
+
             # 每5%打印一次进度，或者是第一个和最后一个块
             if chunk_index == 0 or chunk_index == total_chunks - 1 or int(progress_percent) % 5 == 0:
                 bytes_downloaded = min(firmware.file_size, (chunk_index + 1) * chunk_size)
                 app.logger.info(f"Download progress: {progress_percent}% ({bytes_downloaded}/{firmware.file_size} bytes, chunk {chunk_index+1}/{total_chunks})")
-            
+
             # 返回分块数据和元数据
             response = {
                 'chunk_index': chunk_index,
@@ -1242,7 +1471,7 @@ def download_firmware_chunk(firmware_id):
                 'file_size': firmware.file_size,
                 'bytes_downloaded': min(firmware.file_size, (chunk_index + 1) * chunk_size)
             }
-            
+
             return jsonify(response)
     except Exception as e:
         app.logger.error(f"Error in chunk download: {str(e)}")
@@ -1252,19 +1481,19 @@ def download_firmware_chunk(firmware_id):
 @app.route('/firmware/versions/<string:model_number>', methods=['GET'])
 def list_firmware_versions(model_number):
     firmware_type = request.args.get('firmware_type', 'device')
-    
+
     # 查找设备
     device = Device.get_by_model_number(model_number)
     if not device:
         return jsonify({'error': 'Device not found'}), 404
-    
+
     # 确定固件类型
     is_wifi = firmware_type == 'wifi'
     is_device = firmware_type == 'device'
-    
+
     # 查询所有固件版本
     firmwares = Firmware.get_all(device_id=device.id, user_id=device.user_id)
-    
+
     # 构建版本列表
     versions = []
     base_host = request.host.split(':')[0]
@@ -1272,9 +1501,9 @@ def list_firmware_versions(model_number):
         # 过滤固件类型
         if firmware.is_wifi_firmware != is_wifi or firmware.is_device_firmware != is_device:
             continue
-        
+
         download_url = f"http://{base_host}:3000/firmware/download/{firmware.id}"
-        
+
         versions.append({
             'version': firmware.version,
             'compatible_versions': firmware.compatible_versions,
@@ -1284,7 +1513,7 @@ def list_firmware_versions(model_number):
             'description': firmware.description,
             'url': download_url
         })
-    
+
     return jsonify({
         'model_number': model_number,
         'firmware_type': firmware_type,
@@ -1297,15 +1526,15 @@ def verify_firmware(firmware_id):
     firmware = Firmware.get(firmware_id)
     if not firmware:
         return jsonify({'error': 'Firmware not found'}), 404
-    
+
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     client_crc = data.get('crc')
     if not client_crc:
         return jsonify({'error': 'Missing CRC checksum'}), 400
-    
+
     # 验证CRC校验和
     if client_crc.lower() == firmware.crc_checksum.lower():
         return jsonify({
@@ -1325,26 +1554,26 @@ def register_device():
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     model_number = data.get('model_number')
     serial_number = data.get('serial_number')
     firmware_version = data.get('firmware_version')
-    
+
     if not model_number or not serial_number:
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # 验证固件版本格式（如果提供）
     if firmware_version and not validate_version_format(firmware_version, 'device'):
         return jsonify({'error': 'Invalid firmware version format, must be x.x.x'}), 400
-    
+
     # 查找设备型号
     device_model = Device.get_by_model_number(model_number)
     if not device_model:
         return jsonify({'error': 'Device model not found'}), 404
-    
+
     # 这里可以添加设备实例的注册逻辑
     # 例如，可以创建一个DeviceInstance表来跟踪单个设备
-    
+
     return jsonify({
         'registered': True,
         'device_id': f"{model_number}_{serial_number}",
@@ -1357,17 +1586,17 @@ def update_device_status():
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     model_number = data.get('model_number')
     serial_number = data.get('serial_number')
     status = data.get('status')
-    
+
     if not model_number or not serial_number or not status:
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # 这里可以添加设备状态更新逻辑
     # 例如，可以更新DeviceInstance表中的状态字段
-    
+
     return jsonify({
         'updated': True,
         'message': 'Device status updated successfully'
@@ -1381,7 +1610,7 @@ def admin_users():
         app.logger.warning(f"Unauthorized admin users access attempt: user_id={current_user.id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
-        
+
     users = User.get_all()
     app.logger.info(f"Admin users page accessed: admin_id={current_user.id}, total_users={len(users)}, IP={request.remote_addr}")
     return render_template('admin_users.html', users=users)
@@ -1393,13 +1622,13 @@ def approve_user(user_id):
         app.logger.warning(f"Unauthorized user approval attempt: user_id={current_user.id}, target_user_id={user_id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
-        
+
     user = User.get(user_id)
     if not user:
         app.logger.warning(f"User approval failed - user not found: target_user_id={user_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('用户不存在')
         return redirect(url_for('admin_users'))
-    
+
     old_status = user.status
     user.status = 'approved'
     user.save()
@@ -1414,13 +1643,13 @@ def reject_user(user_id):
         app.logger.warning(f"Unauthorized user rejection attempt: user_id={current_user.id}, target_user_id={user_id}, IP={request.remote_addr}")
         flash('您没有管理员权限')
         return redirect(url_for('dashboard'))
-        
+
     user = User.get(user_id)
     if not user:
         app.logger.warning(f"User rejection failed - user not found: target_user_id={user_id}, admin_id={current_user.id}, IP={request.remote_addr}")
         flash('用户不存在')
         return redirect(url_for('admin_users'))
-    
+
     old_status = user.status
     user.status = 'rejected'
     user.save()
@@ -1441,7 +1670,7 @@ def admin_assign_devices(user_id):
         flash('用户不存在。')
         return redirect(url_for('admin_users'))
 
-    if target_user.is_admin: 
+    if target_user.is_admin:
         flash('不能为此管理员账户分配设备型号权限，管理员默认拥有所有权限。')
         return redirect(url_for('admin_users'))
 
@@ -1456,8 +1685,8 @@ def admin_assign_devices(user_id):
         app.logger.info(f"Admin {current_user.username} updated visible device models for user {target_user.username} to: {selected_model_numbers}")
         return redirect(url_for('admin_users'))
 
-    return render_template('admin_assign_devices.html', 
-                           target_user=target_user, 
+    return render_template('admin_assign_devices.html',
+                           target_user=target_user,
                            all_model_numbers=unique_model_numbers,
                            assigned_model_numbers=target_user.visible_model_numbers)
 
@@ -1470,25 +1699,25 @@ def delete_device(device_id):
         return redirect(url_for('list_devices'))
 
     device = Device.get(device_id)
-    
-    if not device: 
+
+    if not device:
         flash('设备不存在')
         return redirect(url_for('list_devices'))
-    
+
     # 获取设备的所有固件
     firmwares = Firmware.get_all(device_id=device_id)
-    
+
     # 删除所有固件文件
     for firmware in firmwares:
         # 删除固件二进制文件
         if os.path.exists(firmware.file_path):
             os.remove(firmware.file_path)
-        
+
         # 删除固件JSON文件
         firmware_file = os.path.join(app.config['DATA_FOLDER'], 'firmwares', f"{firmware.id}.json")
         if os.path.exists(firmware_file):
             os.remove(firmware_file)
-    
+
     # 删除设备JSON文件
     device_file = os.path.join(app.config['DATA_FOLDER'], 'devices', f"{device_id}.json")
     if os.path.exists(device_file):
@@ -1504,7 +1733,7 @@ def get_device_versions(device_id):
     target_device_instance = Device.get(device_id)
     if not target_device_instance:
         return jsonify({'error': 'Device not found or access denied'}), 404
-    
+
     is_authorized = False
     if current_user.is_admin:
         is_authorized = True
@@ -1519,13 +1748,13 @@ def get_device_versions(device_id):
     firmware_type = request.args.get('firmware_type', 'device')
     is_wifi = firmware_type == 'wifi'
     is_device = firmware_type == 'device'
-    
+
     # 获取设备的所有固件
     all_firmwares = Firmware.get_all(device_id=device_id)
-    
+
     # 过滤出指定类型的固件
     firmwares = [f for f in all_firmwares if f.is_wifi_firmware == is_wifi and f.is_device_firmware == is_device]
-    
+
     # 构建版本列表
     versions = []
     for firmware in firmwares:
@@ -1534,10 +1763,10 @@ def get_device_versions(device_id):
             'created_at': firmware.created_at,
             'status': firmware.status
         })
-    
+
     # 按创建时间排序，最新的在前
     versions.sort(key=lambda x: x['created_at'], reverse=True)
-    
+
     return jsonify({
         'device_id': device_id,
         'firmware_type': firmware_type,
@@ -1549,16 +1778,16 @@ def get_device_versions(device_id):
 @login_required
 def delete_firmware(firmware_id):
     app.logger.info(f"Firmware deletion attempt: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
-    
+
     firmware_to_delete = Firmware.get(firmware_id)
-    
+
     if not firmware_to_delete:
         app.logger.warning(f"Firmware deletion failed - firmware not found: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('固件不存在')
         return redirect(url_for('list_firmwares'))
-    
+
     device_of_firmware = Device.get(firmware_to_delete.device_id)
-    if not device_of_firmware: 
+    if not device_of_firmware:
         app.logger.error(f"Firmware deletion failed - device not found: firmware_id={firmware_id}, device_id={firmware_to_delete.device_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('固件关联的设备不存在。')
         return redirect(url_for('list_firmwares'))
@@ -1579,7 +1808,7 @@ def delete_firmware(firmware_id):
         return redirect(url_for('list_firmwares', device_id=device_id_for_redirect) if device_id_for_redirect else url_for('list_firmwares'))
 
     # Proceed with deletion
-    original_file_path = firmware_to_delete.file_path 
+    original_file_path = firmware_to_delete.file_path
     if os.path.exists(firmware_to_delete.file_path):
         try:
             os.remove(firmware_to_delete.file_path)
@@ -1587,7 +1816,7 @@ def delete_firmware(firmware_id):
         except OSError as e:
             app.logger.error(f"Error deleting firmware file: firmware_id={firmware_id}, file_path={firmware_to_delete.file_path}, error={e}, user_id={current_user.id}")
             flash(f'删除固件文件失败: {e}')
-    
+
     # 删除固件JSON文件
     firmware_json_file_path = os.path.join(app.config['DATA_FOLDER'], 'firmwares', f"{firmware_to_delete.id}.json")
     if os.path.exists(firmware_json_file_path):
@@ -1597,10 +1826,10 @@ def delete_firmware(firmware_id):
         except OSError as e:
             app.logger.error(f"Error deleting firmware metadata: firmware_id={firmware_id}, metadata_path={firmware_json_file_path}, error={e}, user_id={current_user.id}")
             flash(f'删除固件元数据文件失败: {e}')
-    
+
     app.logger.info(f"Firmware deletion completed: firmware_id={firmware_id}, version={firmware_to_delete.version}, device_model={device_of_firmware.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
     flash('固件已成功删除')
-    
+
     # 如果是从设备固件列表页面删除，则返回到该页面
     device_id = request.args.get('device_id')
     if device_id:
@@ -1613,17 +1842,17 @@ def delete_firmware(firmware_id):
 @login_required
 def get_device_info(device_id):
     app.logger.info(f"Device info API request: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
-    
+
     device = Device.get(device_id)
     if not device:
         app.logger.warning(f"Device info API failed - device not found: device_id={device_id}, user_id={current_user.id}, IP={request.remote_addr}")
         return jsonify({'error': 'Device not found'}), 404
-        
+
     # 检查权限
     if not current_user.is_admin and device.model_number not in current_user.visible_model_numbers:
         app.logger.warning(f"Device info API access denied: device_id={device_id}, model_number={device.model_number}, user_id={current_user.id}, IP={request.remote_addr}")
         return jsonify({'error': 'Access denied'}), 403
-        
+
     app.logger.info(f"Device info API success: device_id={device_id}, model_number={device.model_number}, device_type={device.device_type}, user_id={current_user.id}, IP={request.remote_addr}")
     return jsonify({
         'id': device.id,
@@ -1637,11 +1866,11 @@ def get_device_info(device_id):
 def check_device_type(device_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Permission denied'}), 403
-        
+
     device = Device.get(device_id)
     if not device:
         return jsonify({'error': 'Device not found'}), 404
-        
+
     return jsonify({
         'id': device.id,
         'model_number': device.model_number,
@@ -1681,13 +1910,13 @@ def admin_set_device_type(device_id):
 @login_required
 def edit_firmware(firmware_id):
     app.logger.debug(f"Firmware edit attempt: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
-    
+
     firmware = Firmware.get(firmware_id)
     if not firmware:
         app.logger.debug(f"Firmware edit failed - firmware not found: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
         flash('固件不存在')
         return redirect(url_for('list_firmwares'))
-    
+
     device = Device.get(firmware.device_id)
     if not device:
         app.logger.debug(f"Firmware edit failed - device not found: firmware_id={firmware_id}, device_id={firmware.device_id}, user_id={current_user.id}, IP={request.remote_addr}")
@@ -1717,42 +1946,42 @@ def edit_firmware(firmware_id):
         description = request.form.get('description')
         status = request.form.get('status')
         compatible_versions = request.form.getlist('compatible_versions')
-        
+
         app.logger.debug(f"Firmware edit data: firmware_id={firmware_id}, description={description}, status={status}, compatible_versions={compatible_versions}, user_id={current_user.id}")
-        
+
         # 验证状态
         if status not in ['active', 'inactive', 'deprecated']:
             flash('无效的固件状态')
             return redirect(request.url)
-        
+
         # 更新固件信息
         old_description = firmware.description
         old_status = firmware.status
         old_compatible = firmware.compatible_versions
-        
+
         firmware.description = description
         firmware.status = status
         firmware.compatible_versions = compatible_versions
         firmware.save()
-        
+
         app.logger.debug(f"Firmware updated: firmware_id={firmware_id}, old_desc='{old_description}', new_desc='{description}', old_status={old_status}, new_status={status}, old_compatible={old_compatible}, new_compatible={compatible_versions}, user_id={current_user.id}, IP={request.remote_addr}")
-        
+
         flash('固件信息已更新')
         return redirect(url_for('list_firmwares', device_id=firmware.device_id))
-    
+
     app.logger.debug(f"Firmware edit page accessed: firmware_id={firmware_id}, user_id={current_user.id}, IP={request.remote_addr}")
     return render_template('edit_firmware.html', firmware=firmware, device=device, compatible_firmware_options=compatible_firmware_options)
 
 if __name__ == '__main__':
     # Setup logging
     log_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
-    
+
     # File Handler
     log_file = os.path.join(app.config['DATA_FOLDER'], 'app.log')
     file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024*10, backupCount=10)
     file_handler.setFormatter(log_formatter)
     file_handler.setLevel(logging.DEBUG)  # 改为DEBUG级别
-    
+
     # Console Handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_formatter)
@@ -1786,18 +2015,18 @@ if __name__ == '__main__':
         app.logger.info('Default admin account created: username=admin, password=admin123')
     else:
         app.logger.info('Admin account already exists')
-    
+
     # 统计现有数据
     all_users = User.get_all()
     all_devices = Device.get_all()
     all_firmwares = Firmware.get_all()
     app.logger.info(f"System statistics: users={len(all_users)}, devices={len(all_devices)}, firmwares={len(all_firmwares)}")
-    
+
     # 创建SSL上下文
     try:
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_context.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
-        
+
         # 启动HTTPS服务器
         https_server = Thread(target=lambda: app.run(debug=False, host='0.0.0.0', port=3443, ssl_context=ssl_context))
         https_server.daemon = True
@@ -1806,7 +2035,7 @@ if __name__ == '__main__':
     except Exception as e:
         app.logger.error(f'HTTPS server startup failed: {str(e)}')
         app.logger.warning('Please ensure cert.pem and key.pem files exist')
-    
+
     # 启动HTTP服务器（主线程）
     app.logger.info('HTTP server starting on port 3001')
     app.run(debug=True, host='0.0.0.0', port=3000, use_reloader=False)
