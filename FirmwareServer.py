@@ -21,6 +21,33 @@ app.config['UPLOAD_FOLDER'] = 'uploads/firmwares'
 app.config['DATA_FOLDER'] = 'data'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload
 
+def parse_iso_datetime(value):
+    if isinstance(value, datetime.datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    # Python 3.7+ path
+    if hasattr(datetime.datetime, 'fromisoformat'):
+        try:
+            return datetime.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    # Python 3.6 fallback
+    normalized = value.replace('Z', '+00:00')
+    if 'T' in normalized:
+        normalized = normalized.replace('T', ' ')
+
+    # Drop timezone offset for 3.6 strptime compatibility
+    normalized = re.sub(r'([+-]\d{2}:\d{2})$', '', normalized).strip()
+    for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
+        try:
+            return datetime.datetime.strptime(normalized, fmt)
+        except ValueError:
+            continue
+    return None
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
@@ -44,20 +71,16 @@ class User(UserMixin):
         self.status = status
         
         if isinstance(created_at, str):
-            try:
-                self.created_at = datetime.datetime.fromisoformat(created_at)
-            except ValueError:
-                self.created_at = datetime.datetime.utcnow() 
+            parsed_created_at = parse_iso_datetime(created_at)
+            self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
         elif created_at is None:
             self.created_at = datetime.datetime.utcnow()
         else: 
             self.created_at = created_at
 
         if isinstance(updated_at, str):
-            try:
-                self.updated_at = datetime.datetime.fromisoformat(updated_at)
-            except ValueError:
-                self.updated_at = datetime.datetime.utcnow()
+            parsed_updated_at = parse_iso_datetime(updated_at)
+            self.updated_at = parsed_updated_at if parsed_updated_at else datetime.datetime.utcnow()
         elif updated_at is None:
             self.updated_at = datetime.datetime.utcnow()
         else: 
@@ -85,10 +108,7 @@ class User(UserMixin):
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
         if isinstance(created_at_val, str):
-            try:
-                created_at_obj = datetime.datetime.fromisoformat(created_at_val)
-            except ValueError: 
-                created_at_obj = None 
+            created_at_obj = parse_iso_datetime(created_at_val)
         elif isinstance(created_at_val, datetime.datetime):
             created_at_obj = created_at_val
         else:
@@ -96,10 +116,7 @@ class User(UserMixin):
 
         updated_at_val = data.get('updated_at')
         if isinstance(updated_at_val, str):
-            try:
-                updated_at_obj = datetime.datetime.fromisoformat(updated_at_val)
-            except ValueError:
-                updated_at_obj = None
+            updated_at_obj = parse_iso_datetime(updated_at_val)
         elif isinstance(updated_at_val, datetime.datetime):
             updated_at_obj = updated_at_val
         else:
@@ -188,20 +205,16 @@ class Device:
         self.device_type = device_type
         
         if isinstance(created_at, str):
-            try:
-                self.created_at = datetime.datetime.fromisoformat(created_at)
-            except ValueError:
-                self.created_at = datetime.datetime.utcnow()
+            parsed_created_at = parse_iso_datetime(created_at)
+            self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
         elif created_at is None:
             self.created_at = datetime.datetime.utcnow()
         else:
             self.created_at = created_at
 
         if isinstance(updated_at, str):
-            try:
-                self.updated_at = datetime.datetime.fromisoformat(updated_at)
-            except ValueError:
-                self.updated_at = datetime.datetime.utcnow()
+            parsed_updated_at = parse_iso_datetime(updated_at)
+            self.updated_at = parsed_updated_at if parsed_updated_at else datetime.datetime.utcnow()
         elif updated_at is None:
             self.updated_at = datetime.datetime.utcnow()
         else:
@@ -223,17 +236,13 @@ class Device:
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
         if isinstance(created_at_val, str):
-            try:
-                created_at_obj = datetime.datetime.fromisoformat(created_at_val)
-            except ValueError: created_at_obj = None
+            created_at_obj = parse_iso_datetime(created_at_val)
         elif isinstance(created_at_val, datetime.datetime): created_at_obj = created_at_val
         else: created_at_obj = None
 
         updated_at_val = data.get('updated_at')
         if isinstance(updated_at_val, str):
-            try:
-                updated_at_obj = datetime.datetime.fromisoformat(updated_at_val)
-            except ValueError: updated_at_obj = None
+            updated_at_obj = parse_iso_datetime(updated_at_val)
         elif isinstance(updated_at_val, datetime.datetime): updated_at_obj = updated_at_val
         else: updated_at_obj = None
             
@@ -315,10 +324,8 @@ class Firmware:
         self.user_id = user_id
         
         if isinstance(created_at, str):
-            try:
-                self.created_at = datetime.datetime.fromisoformat(created_at)
-            except ValueError:
-                self.created_at = datetime.datetime.utcnow()
+            parsed_created_at = parse_iso_datetime(created_at)
+            self.created_at = parsed_created_at if parsed_created_at else datetime.datetime.utcnow()
         elif created_at is None:
             self.created_at = datetime.datetime.utcnow()
         else:
@@ -347,9 +354,7 @@ class Firmware:
     def from_dict(cls, data):
         created_at_val = data.get('created_at')
         if isinstance(created_at_val, str):
-            try:
-                created_at_obj = datetime.datetime.fromisoformat(created_at_val)
-            except ValueError: created_at_obj = None
+            created_at_obj = parse_iso_datetime(created_at_val)
         elif isinstance(created_at_val, datetime.datetime): created_at_obj = created_at_val
         else: created_at_obj = None
             
@@ -502,6 +507,55 @@ def validate_version_format(version, device_type):
     else:
         # 设备固件版本格式: 纯数字 (如 100)
         return version.isdigit()
+
+def parse_http_range_header(range_header, file_size):
+    """
+    解析单段 Range 头，返回 (start, end)。
+    仅支持单段 bytes 范围，例如 bytes=0-1023 / bytes=1024- / bytes=-1024。
+    """
+    if not range_header:
+        return None
+
+    if not range_header.startswith('bytes='):
+        return None
+
+    range_spec = range_header[len('bytes='):].strip()
+    if not range_spec or ',' in range_spec:
+        return None
+
+    if '-' not in range_spec:
+        return None
+
+    start_str, end_str = range_spec.split('-', 1)
+    start_str = start_str.strip()
+    end_str = end_str.strip()
+
+    try:
+        if start_str == '':
+            # bytes=-N: 请求最后 N 字节
+            suffix_length = int(end_str)
+            if suffix_length <= 0:
+                return None
+            if suffix_length >= file_size:
+                return (0, file_size - 1)
+            return (file_size - suffix_length, file_size - 1)
+
+        start = int(start_str)
+        if start < 0 or start >= file_size:
+            return None
+
+        if end_str == '':
+            end = file_size - 1
+        else:
+            end = int(end_str)
+            if end < start:
+                return None
+            if end >= file_size:
+                end = file_size - 1
+
+        return (start, end)
+    except ValueError:
+        return None
 
 # 添加模板全局函数
 @app.template_global()
@@ -1043,51 +1097,93 @@ def download_firmware(firmware_id):
         firmware.save()
     
     app.logger.info(f"Firmware download confirmed: firmware_id={firmware_id}, file_size={actual_file_size} bytes, file_path={firmware.file_path}, IP={client_ip}")
-    
-    # 创建一个生成器函数来流式传输文件并跟踪进度
-    def generate_file():
-        file_size = actual_file_size
+
+    def generate_file(start_offset, end_offset):
+        total_size = end_offset - start_offset + 1
         bytes_sent = 0
-        chunk_size = 2048
-        last_percent = -1
+        chunk_size = 64 * 1024
         start_time = time.time()
-        
+        last_percent = -1
+
         with open(firmware.file_path, 'rb') as f:
-            while True:
-                data = f.read(chunk_size)
+            f.seek(start_offset)
+            remaining = total_size
+            while remaining > 0:
+                current_chunk_size = chunk_size if remaining > chunk_size else remaining
+                data = f.read(current_chunk_size)
                 if not data:
                     break
-                    
-                bytes_sent += len(data)
-                percent = int((bytes_sent / file_size) * 100) if file_size > 0 else 100
-                
-                # 每10%打印一次进度
+
+                data_len = len(data)
+                bytes_sent += data_len
+                remaining -= data_len
+
+                percent = int((bytes_sent / total_size) * 100) if total_size > 0 else 100
                 if percent >= last_percent + 10 or percent == 100:
                     elapsed_time = time.time() - start_time
                     speed = bytes_sent / elapsed_time if elapsed_time > 0 else 0
-                    app.logger.info(f"Download progress: firmware_id={firmware_id}, progress={percent}%, bytes_sent={bytes_sent}/{file_size}, speed={speed:.2f} bytes/s, IP={client_ip}")
+                    app.logger.info(
+                        f"Download progress: firmware_id={firmware_id}, range={start_offset}-{end_offset}, "
+                        f"progress={percent}%, bytes_sent={bytes_sent}/{total_size}, speed={speed:.2f} bytes/s, IP={client_ip}"
+                    )
                     last_percent = percent
-                    
+
                 yield data
-                time.sleep(0.03)
-        
-        # 下载完成日志
+
         total_time = time.time() - start_time
-        avg_speed = actual_file_size / total_time if total_time > 0 else 0
-        app.logger.info(f"Firmware download completed: firmware_id={firmware_id}, total_bytes={actual_file_size}, total_time={total_time:.2f}s, avg_speed={avg_speed:.2f} bytes/s, IP={client_ip}")
-    
-    # 使用流式响应
+        avg_speed = bytes_sent / total_time if total_time > 0 else 0
+        app.logger.info(
+            f"Firmware download completed: firmware_id={firmware_id}, range={start_offset}-{end_offset}, "
+            f"total_bytes={bytes_sent}, total_time={total_time:.2f}s, avg_speed={avg_speed:.2f} bytes/s, IP={client_ip}"
+        )
+
+    # 使用流式响应，并支持 HTTP Range 断点续传
     filename = os.path.basename(firmware.file_path)
-    headers = {
+    base_headers = {
         'Content-Disposition': f'attachment; filename="{filename}"',
         'Content-Type': 'application/octet-stream',
-        'Content-Length': str(actual_file_size),
+        'Accept-Ranges': 'bytes',
         'Connection': 'keep-alive',
         'keep-alive': 'timeout=5, max=1000'
     }
+
+    range_header = request.headers.get('Range')
+    if range_header:
+        parsed_range = parse_http_range_header(range_header, actual_file_size)
+        if not parsed_range:
+            headers = dict(base_headers)
+            headers['Content-Range'] = f'bytes */{actual_file_size}'
+            app.logger.warning(
+                f"Invalid range request: firmware_id={firmware_id}, range='{range_header}', file_size={actual_file_size}, IP={client_ip}"
+            )
+            return app.response_class('Requested Range Not Satisfiable', status=416, headers=headers)
+
+        start_offset, end_offset = parsed_range
+        partial_size = end_offset - start_offset + 1
+
+        headers = dict(base_headers)
+        headers['Content-Range'] = f'bytes {start_offset}-{end_offset}/{actual_file_size}'
+        headers['Content-Length'] = str(partial_size)
+
+        app.logger.info(
+            f"Partial download: firmware_id={firmware_id}, requested_range='{range_header}', "
+            f"resolved_range={start_offset}-{end_offset}, bytes={partial_size}, IP={client_ip}"
+        )
+
+        return app.response_class(
+            generate_file(start_offset, end_offset),
+            status=206,
+            headers=headers,
+            direct_passthrough=True
+        )
+
+    headers = {
+        **base_headers,
+        'Content-Length': str(actual_file_size),
+    }
     
     return app.response_class(
-        generate_file(),
+        generate_file(0, actual_file_size - 1),
         headers=headers,
         direct_passthrough=True
     )

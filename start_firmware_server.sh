@@ -1,5 +1,3 @@
 #!/bin/bash
-cd /usr/DreameSoftwareServer
-source firmware_env/bin/activate
-cd DreameFirmwareServer
+source .venv/bin/activate
 python FirmwareServer.py
